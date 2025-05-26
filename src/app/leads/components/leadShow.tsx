@@ -132,15 +132,6 @@ export default function LeadsList() {
     try {
       console.log('Original lead data:', lead);
       
-      // Fetch existing demo data for this lead
-      const response = await fetch(`http://localhost:6969/api/demo/view/${lead._id}`);
-      const data: DemoResponse = await response.json();
-      console.log('Demo data from API:', data);
-      
-      if (!data.success) {
-        throw new Error(data.message || 'Failed to fetch demo data');
-      }
-
       // Initialize demo data with lead information
       const demoData: Partial<Demo> = {
         lead: lead._id,
@@ -150,30 +141,38 @@ export default function LeadsList() {
         subject: '',
         status: 'demo_scheduled',
         remarks: '',
-        board: data.lead?.board || lead.board || '',
-        class: data.lead?.class || lead.class || ''
+        board: lead.board || '',
+        class: lead.class || ''
       };
 
-      // If demo exists, update the values
-      if (data.demos && data.demos.length > 0) {
-        const existingDemo = data.demos[0]; // Get the most recent demo
-        Object.assign(demoData, {
-          _id: existingDemo._id,
-          teacher: existingDemo.teacher || '',
-          date: existingDemo.date ? new Date(existingDemo.date).toISOString().split('T')[0] : '',
-          time: existingDemo.time || '',
-          subject: existingDemo.subject || '',
-          status: existingDemo.status || 'demo_scheduled',
-          remarks: existingDemo.remarks || ''
-        });
+      // Try to fetch existing demo data, but don't throw error if none exists
+      try {
+        const response = await fetch(`http://localhost:6969/api/demo/view/${lead._id}`);
+        const data: DemoResponse = await response.json();
+        console.log('Demo data from API:', data);
+        
+        if (data.success && data.demos && data.demos.length > 0) {
+          const existingDemo = data.demos[0]; // Get the most recent demo
+          Object.assign(demoData, {
+            _id: existingDemo._id,
+            teacher: existingDemo.teacher || '',
+            date: existingDemo.date ? new Date(existingDemo.date).toISOString().split('T')[0] : '',
+            time: existingDemo.time || '',
+            subject: existingDemo.subject || '',
+            status: existingDemo.status || 'demo_scheduled',
+            remarks: existingDemo.remarks || ''
+          });
+        }
+      } catch (error) {
+        console.log('No existing demo found, proceeding with new demo');
       }
 
       console.log('Demo data being set:', demoData);
       setEditingLead(lead);
       setBookDemoForm(true);
     } catch (error) {
-      console.error('Error fetching demo:', error);
-      alert('Error fetching demo data. Please try again.');
+      console.error('Error in handleBookDemoClick:', error);
+      alert('Error preparing demo form. Please try again.');
     }
   };
 
