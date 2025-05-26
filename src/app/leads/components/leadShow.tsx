@@ -418,7 +418,7 @@ export default function LeadsList() {
                                 onClick={() => handleEditClick(lead)}
                                 className="text-blue-600 hover:text-blue-900"
                               >
-                                Edit
+                                Edit Lead
                               </button>
                               <button
                                 onClick={() => handleDeleteLead(lead._id)}
