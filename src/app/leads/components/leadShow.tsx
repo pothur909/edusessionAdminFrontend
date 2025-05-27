@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -5,6 +6,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import EditLeadForm from './leadEdit';
 import DemoLeadForm from '../../demo/components/demoForm';
+import EnrollmentForm from '@/app/enrollment/components/enrollmentAddForm';
 
 interface Demo {
   _id: string;
@@ -41,6 +43,7 @@ interface Lead {
   counsellor: string;
   sessionEndDate?: string;
   remarks: string;
+  existingStudentId?: string; // Add this for existing student reference
 }
 
 interface DemoResponse {
@@ -58,6 +61,34 @@ interface DemoResponse {
   };
 }
 
+interface Enrollment {
+  _id?: string;
+  studentName: string;
+  phoneNumber: string;
+  parentsPhoneNumbers: string[];
+  email: string;
+  age: number;
+  city: string;
+  address: string;
+  counsellor: string;
+  studentUsername: string;
+  password: string;
+  studentRating: number;
+}
+
+interface EnrollmentResponse{
+  success: boolean;
+  message: string;
+  demos?: Demo[];
+  enroll?: Enrollment[];
+  lead?: {
+    studentName: string;
+    studentPhone: string;
+    parentPhone: string;
+    city: string;
+  };
+}
+
 export default function LeadsList() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -69,6 +100,11 @@ export default function LeadsList() {
   const [showEditForm, setShowEditForm] = useState(false);
   const [bookDemoForm, setBookDemoForm] = useState(false);
 
+  // enroll use state
+  const [enrolledStudents, setEnrolledStudents] = useState<Enrollment[]>([]);
+  const [showEnrollmentForm, setShowEnrollmentForm] = useState(false);
+  const [enrollmentLoading, setEnrollmentLoading] = useState(false);
+
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
@@ -76,10 +112,8 @@ export default function LeadsList() {
 
   useEffect(() => {
     fetchLeads();
+    fetchEnrolledStudents(); // Add this line to fetch enrolled students on component mount
   }, [activeTab]);
-
-
-  
 
   const fetchLeads = async () => {
     try {
@@ -95,6 +129,40 @@ export default function LeadsList() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const fetchEnrolledStudents = async () => {
+    try {
+      const response = await fetch("http://localhost:6969/api/students");
+      const data = await response.json();
+      if (data.success) {
+        setEnrolledStudents(data.data || []);
+      }
+    } catch (error) {
+      console.log('Error fetching enrolled students:', error);
+    }
+  };
+
+  // New function to fetch specific student by ID
+  const fetchStudentById = async (studentId: string): Promise<Enrollment | null> => {
+    try {
+      const response = await fetch(`http://localhost:6969/api/students/${studentId}`);
+      const data = await response.json();
+      if (data.success) {
+        return data.data;
+      }
+      return null;
+    } catch (error) {
+      console.error('Error fetching student by ID:', error);
+      return null;
+    }
+  };
+
+  const isStudentEnrolled = (lead: Lead) => {
+    return enrolledStudents.some(student => 
+      (student.email && student.email.toLowerCase() === lead.email?.toLowerCase()) || 
+      (student.phoneNumber && student.phoneNumber === lead.studentPhone)
+    );
   };
 
   const handleDeleteLead = async (leadId: string) => {
@@ -185,6 +253,118 @@ export default function LeadsList() {
   const handleEditCancel = () => {
     setEditingLead(null);
     setShowEditForm(false);
+  };
+
+  const handleEnrollClick = async (lead: Lead) => {
+    try {
+      setEnrollmentLoading(true);
+      
+      // Check if student is already enrolled by email or phone
+      const existingStudent = enrolledStudents.find(student => 
+        (student.email && student.email.toLowerCase() === lead.email?.toLowerCase()) || 
+        (student.phoneNumber && student.phoneNumber === lead.studentPhone)
+      );
+
+      if (existingStudent && existingStudent._id) {
+        // If student exists, fetch their complete data
+        console.log('Found existing student:', existingStudent);
+        const completeStudentData = await fetchStudentById(existingStudent._id);
+        
+        if (completeStudentData) {
+          // Set the lead with existing student data for editing
+          setEditingLead({ 
+            ...lead, 
+            existingStudentId: existingStudent._id,
+            // You can add more existing student data here if needed for pre-population
+          });
+          console.log('Setting existing student data for editing:', completeStudentData);
+        } else {
+          // Fallback if fetching specific student fails
+          setEditingLead({ ...lead, existingStudentId: existingStudent._id });
+        }
+      } else {
+        // If new student, just set the lead
+        console.log('New student enrollment for lead:', lead);
+        setEditingLead(lead);
+      }
+      
+      setShowEnrollmentForm(true);
+    } catch (error) {
+      console.error('Error in handleEnrollClick:', error);
+      alert('Error preparing enrollment form. Please try again.');
+    } finally {
+      setEnrollmentLoading(false);
+    }
+  };
+
+  // const handleEnrollClick = async( enroll : Enrollment)=>{
+
+  //   try{
+  //     console.log('enroll data', enroll);
+
+  //     const enrollData: Partial<Enrollment>={
+
+  //     studentName: '',
+  //     phoneNumber: '',
+  //     parentsPhoneNumbers: [],
+  //     email: '',
+  //     age: 0,
+  //     city: '',
+  //     address: '',
+  //     counsellor: '',
+  //     studentUsername: '',
+  //     password: '',
+  //     studentRating: 0,
+  //     }
+      
+  //     try{
+  //       const response = await fetch(`http://localhost:6969/api/students/${enroll._id}`)
+  //       const data: EnrollmentResponse = await  response.json();
+  //       console.log(" enroll response", data);
+
+  //       if(data.success && data.enroll && data.enroll.length>0){
+  //         const existingEnroll = data.enroll[0];
+
+  //         Object.assign(enrollData, {
+  //            _id: existingEnroll._id,
+  //            studentName: existingEnroll.studentName,
+  //            parentsPhoneNumbers: existingEnroll.parentsPhoneNumbers,
+  //            email: existingEnroll.email,
+  //             age: existingEnroll.age,
+  //            city: existingEnroll.city,
+  //            address: existingEnroll.city,
+  //            counsellor: existingEnroll.counsellor,
+  //            studentUsername: existingEnroll.studentUsername,
+  //            password: existingEnroll.password,
+  //            studentRating: existingEnroll.studentRating,
+             
+  //         });
+  //       }
+
+  //     }
+  //     catch(error){
+  //       console.error("No existing enroll found, proceeding with enroll")
+  //     }
+
+  //     console.log("enroll data", enrollData);
+  //     setShowEnrollmentForm(true);
+      
+  //   }
+  //   catch(error){
+  //     console.error("Error in handleEnrollClick", error)
+  //   }
+  // }
+
+  const handleEnrollmentComplete = () => {
+    setEditingLead(null);
+    setShowEnrollmentForm(false);
+    fetchLeads();
+    fetchEnrolledStudents(); // Refresh enrolled students list
+  };
+
+  const handleEnrollmentCancel = () => {
+    setEditingLead(null);
+    setShowEnrollmentForm(false);
   };
 
   const filteredLeads = leads.filter((lead) => {
@@ -302,6 +482,27 @@ export default function LeadsList() {
             }}
           />
         </div>
+      ) : showEnrollmentForm && editingLead ? (
+        <div className="bg-white rounded-lg shadow-lg p-6">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-bold text-black">
+              {editingLead.existingStudentId ? 'Update Student' : 'Enroll Student'} - {editingLead.studentName}
+            </h2>
+            <button
+              onClick={handleEnrollmentCancel}
+              className="text-gray-500 hover:text-gray-700"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <EnrollmentForm 
+            lead={editingLead} 
+            onComplete={handleEnrollmentComplete}
+            onCancel={handleEnrollmentCancel}
+          />
+        </div>
       ) : (
         <>
           {/* Search */}
@@ -371,12 +572,13 @@ export default function LeadsList() {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Demo</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Enrollment</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {currentLeads.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-6 py-4 text-center text-gray-500">
+                      <td colSpan={8} className="px-6 py-4 text-center text-gray-500">
                         No leads found
                       </td>
                     </tr>
@@ -402,7 +604,6 @@ export default function LeadsList() {
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-sm text-gray-900">{lead.board} - Class {lead.class}</div>
                             <div className="text-sm text-gray-500">{lead.subjects.join(', ')}</div>
-                            <div className="text-sm text-gray-500">Source: {lead.leadSource}</div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(lead.status)}`}>
@@ -410,15 +611,15 @@ export default function LeadsList() {
                             </span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {new Date(lead.createdAt).toLocaleDateString()}
+                            {new Date(lead.createdAt).toLocaleDateString('en-GB')}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                            <div className="flex space-x-3">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            <div className="flex flex-col items-start gap-1">
                               <button
                                 onClick={() => handleEditClick(lead)}
                                 className="text-blue-600 hover:text-blue-900"
                               >
-                                Edit Lead
+                                Edit
                               </button>
                               <button
                                 onClick={() => handleDeleteLead(lead._id)}
@@ -437,6 +638,30 @@ export default function LeadsList() {
                               Book Demo
                             </button>
                           </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                            {isStudentEnrolled(lead) ? (
+                              <div className="flex flex-col items-end gap-1">
+                                <span className="inline-block bg-green-100 text-green-800 px-2 py-1 rounded text-sm">
+                                  Enrolled
+                                </span>
+                                <button
+                                  onClick={() => handleEnrollClick(lead)}
+                                  disabled={enrollmentLoading}
+                                  className="text-blue-600 hover:text-blue-900 text-xs disabled:opacity-50"
+                                >
+                                  {enrollmentLoading ? 'Loading...' : 'Update'}
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => handleEnrollClick(lead)}
+                                disabled={enrollmentLoading}
+                                className="text-blue-600 hover:text-blue-900 disabled:opacity-50"
+                              >
+                                {enrollmentLoading ? 'Loading...' : 'Enroll'}
+                              </button>
+                            )}
+                          </td>
                         </tr>
                       );
                     })
@@ -450,3 +675,5 @@ export default function LeadsList() {
     </div>
   );
 }
+
+

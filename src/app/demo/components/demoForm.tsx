@@ -20,8 +20,9 @@ interface Lead {
   classesPerWeek: number;
   courseInterested: string;
   modeOfContact: string;
+  preferredTimeSlots:string;
   counsellor: string;
-  sessionEndDate?: string;
+  sessionEndDate: string;
   remarks: string;
 }
 
@@ -36,6 +37,8 @@ interface Demo {
   subject: string;
   status: 'demo_scheduled' | 'demo_completed' | 'demo_cancelled' | 'demo_no_show' | 'demo_rescheduled' | 'demo_rescheduled_cancelled' | 'demo_rescheduled_completed' | 'demo_rescheduled_no_show';
   remarks: string;
+    preferredTimeSlots:string;
+
 }
 
 interface DemoResponse {
@@ -63,7 +66,9 @@ export default function DemoLeadForm({ lead, onComplete, onCancel }: DemoLeadFor
     class: lead.class || '',
     subject: '',
     status: 'demo_scheduled',
-    remarks: ''
+    remarks: '',
+    preferredTimeSlots: lead.preferredTimeSlots || '', 
+
   });
 
   // Add state for lead data with default values
@@ -115,7 +120,9 @@ export default function DemoLeadForm({ lead, onComplete, onCancel }: DemoLeadFor
               class: existingDemo.class || lead.class || '',
               subject: existingDemo.subject || '',
               status: existingDemo.status || 'demo_scheduled',
-              remarks: existingDemo.remarks || ''
+              remarks: existingDemo.remarks || '',
+              preferredTimeSlots: lead.preferredTimeSlots || '',
+            
             });
           }
         }
@@ -294,14 +301,43 @@ export default function DemoLeadForm({ lead, onComplete, onCancel }: DemoLeadFor
               />
             </div>
           </div>
-        </div>
+
+               <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Prefered time *</label>
+              <input
+                type="time"
+                name="preferredTimeSlots"
+                value={formData.preferredTimeSlots}
+                onChange={handleChange}
+                required
+                className="border p-3 rounded-md w-full"
+              />
+            </div>
+
+
+
+                <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Last Session End</label>
+              <input
+                type="date"
+                name="sessionEndDate"
+                value={leadData.sessionEndDate}
+                onChange={handleChange}
+                required
+                className="border p-3 rounded-md w-full"
+              />
+            </div>
+          </div>
+        
+        
+        
 
         {/* Demo Information Section */}
         <div className="bg-gray-50 p-4 rounded-md">
           <h3 className="text-lg font-medium mb-4">Demo Information</h3>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Teacher *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Teacher Alloted for demo*</label>
               <input
                 type="text"
                 name="teacher"
@@ -312,7 +348,7 @@ export default function DemoLeadForm({ lead, onComplete, onCancel }: DemoLeadFor
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Subject *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Subject for demo*</label>
               <select
                 name="subject"
                 value={formData.subject}
@@ -333,7 +369,7 @@ export default function DemoLeadForm({ lead, onComplete, onCancel }: DemoLeadFor
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Date *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Demo Date *</label>
               <input
                 type="date"
                 name="date"
@@ -344,7 +380,7 @@ export default function DemoLeadForm({ lead, onComplete, onCancel }: DemoLeadFor
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Time *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Demo Time *</label>
               <input
                 type="time"
                 name="time"

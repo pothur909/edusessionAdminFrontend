@@ -103,6 +103,7 @@
 import { useState } from "react";
 import LeadForm from "../leads/components/leadAdd";
 import LeadsList from "../leads/components/leadShow";
+import EnrollmentList from "../enrollment/components/enrollmentShow";
 
 // Success Popup Component
 function SuccessPopup({ show, onClose }) {
@@ -181,7 +182,13 @@ const SideBar = () => {
                 <div>
                     <LeadsList/>
                 </div>
-            )
+            );
+             case "Show Enrollment":
+            return(
+                <div>
+                    <EnrollmentList/>
+                </div>
+            );
       case "Settings":
         return (
           <div className="p-8">
@@ -200,6 +207,7 @@ const SideBar = () => {
     { name: "Dashboard", icon: "📊" },
     { name: "Create Leads", icon: "👥" },
     {name: "Show Leads", icon:"👥"},
+     {name: "Show Enrollment", icon:"👥"},
     { name: "Settings", icon: "⚙️" }
   ];
 
