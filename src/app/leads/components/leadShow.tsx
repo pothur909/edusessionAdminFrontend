@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -44,6 +43,9 @@ interface Lead {
   sessionEndDate?: string;
   remarks: string;
   existingStudentId?: string; // Add this for existing student reference
+  preferredTimeSlots?: string; // Add this
+  city?: string; // Add this
+  demo?: Demo | null; // Add this for demo data
 }
 
 interface DemoResponse {
@@ -61,8 +63,30 @@ interface DemoResponse {
   };
 }
 
-interface Enrollment {
+interface Subject {
   _id?: string;
+  student: string;
+  board: string;
+  class: string;
+  subject: string;
+  numberOfClassesPerWeek: number;
+  teacher: string;
+  timeSlots: string[];
+  paymentDetails: {
+    classAmount: number;
+    amountPaid: number;
+    lastPayments: {
+      paymentId: string;
+      date: Date;
+      amount: number;
+    }[];
+  };
+  remarks: string[];
+}
+
+interface Enrollment {
+  _id: string;
+  lead: string;
   studentName: string;
   phoneNumber: string;
   parentsPhoneNumbers: string[];
@@ -74,6 +98,7 @@ interface Enrollment {
   studentUsername: string;
   password: string;
   studentRating: number;
+  subjects?: Subject[]; // Add this line
 }
 
 interface EnrollmentResponse{
@@ -86,6 +111,9 @@ interface EnrollmentResponse{
     studentPhone: string;
     parentPhone: string;
     city: string;
+    email: string;
+    board: string;
+    class: string;
   };
 }
 
@@ -257,109 +285,115 @@ export default function LeadsList() {
 
   const handleEnrollClick = async (lead: Lead) => {
     try {
+      console.log('Original lead data:', lead);
       setEnrollmentLoading(true);
       
-      // Check if student is already enrolled by email or phone
-      const existingStudent = enrolledStudents.find(student => 
-        (student.email && student.email.toLowerCase() === lead.email?.toLowerCase()) || 
-        (student.phoneNumber && student.phoneNumber === lead.studentPhone)
-      );
-
-      if (existingStudent && existingStudent._id) {
-        // If student exists, fetch their complete data
-        console.log('Found existing student:', existingStudent);
-        const completeStudentData = await fetchStudentById(existingStudent._id);
+      // Fetch both enrollment and demo data in parallel
+      try {
+        const [enrollmentResponse, demoResponse] = await Promise.all([
+          fetch('http://localhost:6969/api/students'),
+          fetch(`http://localhost:6969/api/demo/view/${lead._id}`)
+        ]);
+  
+        const enrollmentData = await enrollmentResponse.json();
+        const demoData: DemoResponse = await demoResponse.json();
         
-        if (completeStudentData) {
-          // Set the lead with existing student data for editing
-          setEditingLead({ 
-            ...lead, 
-            existingStudentId: existingStudent._id,
-            // You can add more existing student data here if needed for pre-population
-          });
-          console.log('Setting existing student data for editing:', completeStudentData);
+        console.log('Enrollment response:', enrollmentData);
+        console.log('Demo response:', demoData);
+        
+        // Check if enrollment data is an array
+        if (Array.isArray(enrollmentData)) {
+          // Find student by lead ID or matching contact info
+          const existingStudent = enrollmentData.find((student: Enrollment) => 
+            student.lead === lead._id || 
+            (student.email && student.email.toLowerCase() === lead.email?.toLowerCase()) ||
+            (student.phoneNumber && student.phoneNumber === lead.studentPhone)
+          );
+  
+          if (existingStudent) {
+            console.log('Found existing student:', existingStudent);
+            
+            // Fetch subjects for this student
+            try {
+              const subjectsResponse = await fetch(`http://localhost:6969/api/subject/${existingStudent._id}`);
+              const subjectsData = await subjectsResponse.json();
+              console.log('Subjects response:', subjectsData);
+
+              // If enrollment exists, set it for editing with demo data and subjects
+              setEditingLead({ 
+                ...lead, 
+                existingStudentId: existingStudent._id,
+                city: existingStudent.city || lead.city || '',
+                preferredTimeSlots: lead.preferredTimeSlots || '',
+                demo: demoData.demos?.[0] || null,
+                subjects: subjectsData.data || [] // Add subjects data
+              });
+            } catch (error) {
+              console.error('Error fetching subjects:', error);
+              // Still set the lead with existing student data even if subjects fetch fails
+              setEditingLead({ 
+                ...lead, 
+                existingStudentId: existingStudent._id,
+                city: existingStudent.city || lead.city || '',
+                preferredTimeSlots: lead.preferredTimeSlots || '',
+                demo: demoData.demos?.[0] || null
+              });
+            }
+          } else {
+            console.log('No existing student found, proceeding with new enrollment');
+            setEditingLead({
+              ...lead,
+              city: lead.city || '',
+              preferredTimeSlots: lead.preferredTimeSlots || '',
+              demo: demoData.demos?.[0] || null
+            });
+          }
         } else {
-          // Fallback if fetching specific student fails
-          setEditingLead({ ...lead, existingStudentId: existingStudent._id });
+          console.log('Invalid enrollment response format, proceeding with new enrollment');
+          setEditingLead({
+            ...lead,
+            city: lead.city || '',
+            preferredTimeSlots: lead.preferredTimeSlots || '',
+            demo: demoData.demos?.[0] || null
+          });
         }
-      } else {
-        // If new student, just set the lead
-        console.log('New student enrollment for lead:', lead);
-        setEditingLead(lead);
+      } catch (error) {
+        console.log('Error fetching data, proceeding with new enrollment:', error);
+        setEditingLead({
+          ...lead,
+          city: lead.city || '',
+          preferredTimeSlots: lead.preferredTimeSlots || '',
+          demo: null
+        });
       }
-      
+  
       setShowEnrollmentForm(true);
+      
     } catch (error) {
-      console.error('Error in handleEnrollClick:', error);
+      console.error("Error in handleEnrollClick", error);
       alert('Error preparing enrollment form. Please try again.');
     } finally {
       setEnrollmentLoading(false);
     }
   };
 
-  // const handleEnrollClick = async( enroll : Enrollment)=>{
-
-  //   try{
-  //     console.log('enroll data', enroll);
-
-  //     const enrollData: Partial<Enrollment>={
-
-  //     studentName: '',
-  //     phoneNumber: '',
-  //     parentsPhoneNumbers: [],
-  //     email: '',
-  //     age: 0,
-  //     city: '',
-  //     address: '',
-  //     counsellor: '',
-  //     studentUsername: '',
-  //     password: '',
-  //     studentRating: 0,
-  //     }
+  const handleEnrollmentComplete = async () => {
+    try {
+      // Refresh both leads and enrolled students
+      await Promise.all([
+        fetchLeads(),
+        fetchEnrolledStudents()
+      ]);
       
-  //     try{
-  //       const response = await fetch(`http://localhost:6969/api/students/${enroll._id}`)
-  //       const data: EnrollmentResponse = await  response.json();
-  //       console.log(" enroll response", data);
-
-  //       if(data.success && data.enroll && data.enroll.length>0){
-  //         const existingEnroll = data.enroll[0];
-
-  //         Object.assign(enrollData, {
-  //            _id: existingEnroll._id,
-  //            studentName: existingEnroll.studentName,
-  //            parentsPhoneNumbers: existingEnroll.parentsPhoneNumbers,
-  //            email: existingEnroll.email,
-  //             age: existingEnroll.age,
-  //            city: existingEnroll.city,
-  //            address: existingEnroll.city,
-  //            counsellor: existingEnroll.counsellor,
-  //            studentUsername: existingEnroll.studentUsername,
-  //            password: existingEnroll.password,
-  //            studentRating: existingEnroll.studentRating,
-             
-  //         });
-  //       }
-
-  //     }
-  //     catch(error){
-  //       console.error("No existing enroll found, proceeding with enroll")
-  //     }
-
-  //     console.log("enroll data", enrollData);
-  //     setShowEnrollmentForm(true);
-      
-  //   }
-  //   catch(error){
-  //     console.error("Error in handleEnrollClick", error)
-  //   }
-  // }
-
-  const handleEnrollmentComplete = () => {
-    setEditingLead(null);
-    setShowEnrollmentForm(false);
-    fetchLeads();
-    fetchEnrolledStudents(); // Refresh enrolled students list
+      // Reset form state
+      setEditingLead(null);
+      setShowEnrollmentForm(false);
+    } catch (error) {
+      console.error('Error refreshing data after enrollment:', error);
+      // Still reset the form even if refresh fails
+      setEditingLead(null);
+      setShowEnrollmentForm(false);
+    }
   };
 
   const handleEnrollmentCancel = () => {

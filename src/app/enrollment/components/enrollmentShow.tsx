@@ -20,6 +20,7 @@ interface Enrollment {
   createdAt: string;
   updatedAt: string;
   status?: 'active' | 'inactive' | 'graduated' | 'dropped';
+  
 }
 
 interface EnrollmentResponse {
@@ -27,6 +28,8 @@ interface EnrollmentResponse {
   message: string;
   data?: Enrollment[];
 }
+
+
 
 export default function EnrollmentList() {
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);

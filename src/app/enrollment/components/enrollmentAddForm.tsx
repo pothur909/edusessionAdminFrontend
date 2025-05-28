@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -25,8 +24,40 @@ interface Lead {
   sessionEndDate: string;
   remarks: string;
   city: string;
-  enrollment?: Enrollment;
-//   student?: string; // Reference to student ID if enrolled
+  existingStudentId?: string; // Add this to identify existing student
+  demo?: Demo | null; // Add this for demo data
+}
+
+// First, define the PaymentDetails interface
+// interface PaymentDetails {
+//   classAmount: number;
+//   amountPaid: number;
+//   lastPayments: Array<{
+//     paymentId: string;
+//     date: Date;
+//     amount: number;
+//   }>;
+// }
+
+
+interface Subject {
+  student: string; // This will be the ObjectId reference
+  board: string;
+  class: string;
+  subject: string;
+  numberOfClassesPerWeek: number;
+  teacher: string;
+  timeSlots: string[]; // Array of strings
+  paymentDetails: {
+    classAmount: number;
+    amountPaid: number;
+    lastPayments: Array<{
+      paymentId: string;
+      date: Date;
+      amount: number;
+    }>;
+  };
+  remarks: string[]; // Array of strings
 }
 
 interface Demo {
@@ -45,6 +76,7 @@ interface Demo {
 
 interface Enrollment {
   _id?: string;
+  lead: string;
   studentName: string;
   phoneNumber: string;
   parentsPhoneNumbers: string[];
@@ -56,6 +88,7 @@ interface Enrollment {
   studentUsername: string;
   password: string;
   studentRating: number;
+  subjects?: Subject[]; // Add this line
 }
 
 interface EnrollmentFormProps {
@@ -64,21 +97,34 @@ interface EnrollmentFormProps {
   onCancel: () => void;
 }
 
-interface EnrollmentResponse{
-     success: boolean;
-     message: string;
-     demo?: Demo[];
-     lead?: Lead;
-     enrollment?: Enrollment;
+interface DemoResponse {
+  success: boolean;
+  message: string;
+  demos?: Demo[];
 }
 
-export default function EnrollmentForm({ lead, onComplete, onCancel,  }: EnrollmentFormProps) {
+interface StudentsResponse {
+  success: boolean;
+  message: string;
+  data?: Enrollment[];
+}
+
+interface StudentResponse {
+  success: boolean;
+  message: string;
+  data?: Enrollment;
+}
+
+export default function EnrollmentForm({ lead, onComplete, onCancel }: EnrollmentFormProps) {
   const [loading, setLoading] = useState(false);
   const [fetchingData, setFetchingData] = useState(true);
   const [demo, setDemo] = useState<Demo | null>(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [subjects, setSubjects] = useState<Subject[]>([]);
   const [existingStudentId, setExistingStudentId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState<Enrollment>({
+    lead: lead._id,
     studentName: '',
     phoneNumber: '',
     parentsPhoneNumbers: [],
@@ -92,120 +138,255 @@ export default function EnrollmentForm({ lead, onComplete, onCancel,  }: Enrollm
     studentRating: 0
   });
 
+
+  
+    // Add these new functions here
+    const addNewSubject = () => {
+      const newSubject: Subject = {
+        student: '',
+        board: lead.board || '',
+        class: lead.class || '',
+        subject: '',
+        numberOfClassesPerWeek: lead.classesPerWeek || 0,
+        teacher: '',
+        timeSlots: [], // Initialize as empty array
+        paymentDetails: {
+          classAmount: 0,
+          amountPaid: 0,
+          lastPayments: []
+        },
+        remarks: []
+      };
+      setSubjects([...subjects, newSubject]);
+    };
+  
+    const removeSubject = (index: number) => {
+      const newSubjects = [...subjects];
+      newSubjects.splice(index, 1);
+      setSubjects(newSubjects);
+    };
+
+
+
+    const handleSubjectChange = (index: number, field: string, value: any) => {
+      const newSubjects = [...subjects];
+      if (field.includes('.')) {
+        // Handle nested fields like paymentDetails.classAmount
+        const [parent, child] = field.split('.');
+        if (parent === 'paymentDetails') {
+          switch (child) {
+            case 'classAmount':
+              newSubjects[index].paymentDetails.classAmount = value;
+              break;
+            case 'amountPaid':
+              newSubjects[index].paymentDetails.amountPaid = value;
+              break;
+            case 'lastPayments':
+              newSubjects[index].paymentDetails.lastPayments = value;
+              break;
+            default:
+              console.warn(`Unknown paymentDetails field: ${child}`);
+          }
+        }
+      } else {
+        // Handle direct fields
+        switch (field) {
+          case 'subject':
+            newSubjects[index].subject = value;
+            break;
+          case 'teacher':
+            newSubjects[index].teacher = value;
+            break;
+          case 'numberOfClassesPerWeek':
+            newSubjects[index].numberOfClassesPerWeek = value;
+        break;
+      case 'timeSlots':
+        newSubjects[index].timeSlots = value;
+        break;
+      case 'board':
+        newSubjects[index].board = value;
+        break;
+      case 'class':
+        newSubjects[index].class = value;
+        break;
+      case 'remarks':
+        newSubjects[index].remarks = value;
+        break;
+      default:
+        console.warn(`Unknown field: ${field}`);
+    }
+  }
+  setSubjects(newSubjects);
+};
+
+
+  const initializeSubjectsFromLead = (lead: Lead) => {
+    if (lead.subjects && lead.subjects.length > 0) {
+      const initialSubjects: Subject[] = lead.subjects.map(subject => ({
+        student: '', // Will be set after student creation
+        board: lead.board || '',
+        class: lead.class || '',
+        subject: subject,
+        numberOfClassesPerWeek: lead.classesPerWeek || 0,
+        teacher: '',
+        timeSlots: lead.preferredTimeSlots ? [lead.preferredTimeSlots] : [],
+        paymentDetails: {
+          classAmount: 0,
+          amountPaid: 0,
+          lastPayments: []
+        },
+        remarks: []
+      }));
+      setSubjects(initialSubjects);
+    }
+  };
+
+  const initializeFormWithLeadData = () => {
+    console.log('Initializing form with lead data');
+    setIsEditing(false);
+    setExistingStudentId(null);
+
+    const initialFormData: Enrollment = {
+      lead: lead._id,
+      studentName: lead.studentName || '',
+      phoneNumber: lead.studentPhone || '',
+      parentsPhoneNumbers: lead.parentPhone ? [lead.parentPhone] : [],
+      email: lead.email || '',
+      age: 0,
+      city: lead.city || '',
+      address: '',
+      counsellor: lead.counsellor || '',
+      studentUsername: '',
+      password: '',
+      studentRating: 0
+    };
+
+    console.log('Setting form data from lead:', initialFormData);
+    setFormData(initialFormData);
+  };
+
+  
+
   useEffect(() => {
     const fetchData = async () => {
       try {
         setFetchingData(true);
-        
-        // Fetch demo data
-        try {
-          const demoResponse = await fetch(`http://localhost:6969/api/demo/view/${lead._id}`);
-          const demoData = await demoResponse.json();
-          console.log('Demo response:', demoData);
-        //   const enrollmentResoonse =await fetch(`http://localhost:6969/api/students`)
 
-          if (demoData.success && demoData.demos && demoData.demos.length > 0) {
-            setDemo(demoData.demos[0]);
+
+
+        // If we have demo data in the lead, use it
+        if (lead.demo) {
+          console.log('Using demo data from lead:', lead.demo);
+          setDemo(lead.demo);
+        } else {
+          // If no demo data in lead, try to fetch it
+          try {
+            const demoResponse = await fetch(`http://localhost:6969/api/demo/view/${lead._id}`);
+            const demoData: DemoResponse = await demoResponse.json();
+            console.log('Fetched demo data:', demoData);
+
+            if (demoData.success && demoData.demos && demoData.demos.length > 0) {
+              setDemo(demoData.demos[0]);
+            }
+          } catch (error) {
+            console.error('Error fetching demo data:', error);
           }
-
-          
-
-          // Check if lead has enrollment data
-          if (demoData.lead && demoData.enrollment) {
-            const existingStudent = demoData.enrollment;
-            setIsEditing(true);
-            setExistingStudentId(existingStudent._id);
-
-            console.log(demoData.lead.enrollment,"twoooo")
-            
-            // Map the student data to form data
-            const initialFormData: Enrollment = {
-              _id: existingStudent._id,
-              studentName: existingStudent.studentName || lead.studentName || '',
-              phoneNumber: existingStudent.phoneNumber || lead.studentPhone || '',
-              parentsPhoneNumbers: Array.isArray(existingStudent.parentsPhoneNumbers) 
-                ? existingStudent.parentsPhoneNumbers 
-                : (lead.parentPhone ? [lead.parentPhone] : []),
-              email: existingStudent.email || lead.email || '',
-              age: existingStudent.age || 0,
-              city: existingStudent.city || lead.city || '',
-              address: existingStudent.address || '',
-              counsellor: existingStudent.counsellor || lead.counsellor || '',
-              studentUsername: existingStudent.studentUsername || '',
-              password: existingStudent.password || '',
-              studentRating: existingStudent.studentRating || 0
-            };
-            
-            console.log('Setting form data from lead enrollment:', initialFormData);
-            setFormData(initialFormData);
-            setFetchingData(false);
-            return;
-          }
-        } catch (error) {
-          console.log('No demo data found:', error);
         }
 
-        // Initialize form with lead data
-        const initialFormData: Enrollment = {
-          studentName: lead.studentName || '',
-          phoneNumber: lead.studentPhone || '',
-          parentsPhoneNumbers: lead.parentPhone ? [lead.parentPhone] : [],
-          email: lead.email || '',
-          age: 0,
-          city: lead.city || '',
-          address: '',
-          counsellor: lead.counsellor || '',
-          studentUsername: '',
-          password: '',
-          studentRating: 0
-        };
+        // If we have an existing student ID, fetch that student's data
+        if (lead.existingStudentId) {
+          try {
+            console.log('Fetching existing student with ID:', lead.existingStudentId);
+            const response = await fetch(`http://localhost:6969/api/students/${lead.existingStudentId}`);
+            const data = await response.json();
+            console.log('Existing student data:', data);
 
-        // If no enrollment found in lead, check for student by email
-        try {
-          const studentResponse = await fetch(`http://localhost:6969/api/students?email=${encodeURIComponent(lead.email)}`);
-          if (studentResponse.ok) {
-            const studentData = await studentResponse.json();
-            console.log('Fetched student data:', studentData);
-            
-            if (studentData.success && studentData.data && studentData.data.length > 0) {
-              const existingStudent = studentData.data[0];
+            // Handle both array and object responses
+            const existingEnrollment = Array.isArray(data) ? data[0] : data;
+
+            if (existingEnrollment) {
               setIsEditing(true);
-              setExistingStudentId(existingStudent._id);
-              
-              // Map the student data to form data
-              initialFormData._id = existingStudent._id;
-              initialFormData.studentName = existingStudent.studentName || lead.studentName || '';
-              initialFormData.phoneNumber = existingStudent.phoneNumber || lead.studentPhone || '';
-              initialFormData.parentsPhoneNumbers = Array.isArray(existingStudent.parentsPhoneNumbers) 
-                ? existingStudent.parentsPhoneNumbers 
-                : (lead.parentPhone ? [lead.parentPhone] : []);
-              initialFormData.email = existingStudent.email || lead.email || '';
-              initialFormData.age = existingStudent.age || 0;
-              initialFormData.city = existingStudent.city || lead.city || '';
-              initialFormData.address = existingStudent.address || '';
-              initialFormData.counsellor = existingStudent.counsellor || lead.counsellor || '';
-              initialFormData.studentUsername = existingStudent.studentUsername || '';
-              initialFormData.password = existingStudent.password || '';
-              initialFormData.studentRating = existingStudent.studentRating || 0;
-              
-              console.log('Setting form data for existing student:', initialFormData);
-              setFormData(initialFormData);
-              setFetchingData(false);
+              setExistingStudentId(existingEnrollment._id);
+
+              setFormData({
+                _id: existingEnrollment._id,
+                lead: lead._id,
+                studentName: existingEnrollment.studentName || lead.studentName || '',
+                phoneNumber: existingEnrollment.phoneNumber || lead.studentPhone || '',
+                parentsPhoneNumbers: existingEnrollment.parentsPhoneNumbers || [lead.parentPhone || ''],
+                email: existingEnrollment.email || lead.email || '',
+                age: existingEnrollment.age || 0,
+                city: existingEnrollment.city || lead.city || '',
+                address: existingEnrollment.address || '',
+                counsellor: existingEnrollment.counsellor || lead.counsellor || '',
+                studentUsername: existingEnrollment.studentUsername || '',
+                password: existingEnrollment.password || '',
+                studentRating: existingEnrollment.studentRating || 0
+              });
+
+              // Fetch subjects for this student
+              try {
+                const subjectsResponse = await fetch(`http://localhost:6969/api/subject/${existingEnrollment._id}`);
+                const subjectsData = await subjectsResponse.json();
+                console.log('Fetched subjects data:', subjectsData);
+                
+                if (subjectsData.success && subjectsData.data) {
+                  // Transform the subjects data to match our Subject interface
+                  const transformedSubjects = subjectsData.data.map((subject: any) => ({
+                    student: subject.student,
+                    board: subject.board,
+                    class: subject.class,
+                    subject: subject.subject,
+                    numberOfClassesPerWeek: subject.numberOfClassesPerWeek,
+                    teacher: subject.teacher,
+                    timeSlots: Array.isArray(subject.timeSlots) ? subject.timeSlots : [subject.timeSlots],
+                    paymentDetails: {
+                      classAmount: subject.paymentDetails.classAmount || 0,
+                      amountPaid: subject.paymentDetails.amountPaid || 0,
+                      lastPayments: subject.paymentDetails.lastPayments || []
+                    },
+                    remarks: subject.remarks || []
+                  }));
+                  console.log('Transformed subjects:', transformedSubjects);
+                  setSubjects(transformedSubjects);
+                }
+              } catch (error) {
+                console.error('Error fetching subjects:', error);
+              }
               return;
             }
+          } catch (error) {
+            console.error('Error fetching existing student:', error);
           }
-        } catch (error) {
-          console.error('Error fetching student data:', error);
         }
 
-        // If no existing student found or error occurred, use lead data
-        console.log('No existing student found, using lead data:', initialFormData);
-        setIsEditing(false);
-        setExistingStudentId(null);
-        setFormData(initialFormData);
+        // If no existing student or error occurred, initialize with lead data
+        initializeFormWithLeadData();
+
+        // Initialize subjects from lead data for new enrollment
+        if (lead.subjects && lead.subjects.length > 0) {
+          const initialSubjects: Subject[] = lead.subjects.map(subject => ({
+            student: '', // Will be set after student creation
+            board: lead.board || '',
+            class: lead.class || '',
+            subject: subject,
+            numberOfClassesPerWeek: lead.classesPerWeek || 0,
+            teacher: '',
+            timeSlots: lead.preferredTimeSlots ? [lead.preferredTimeSlots] : [],
+            paymentDetails: {
+              classAmount: 0,
+              amountPaid: 0,
+              lastPayments: []
+            },
+            remarks: []
+          }));
+          setSubjects(initialSubjects);
+        }
+
 
       } catch (error) {
-        console.error('Error fetching data:', error);
+        console.error('Error in fetchData:', error);
+        initializeFormWithLeadData();
       } finally {
         setFetchingData(false);
       }
@@ -216,7 +397,7 @@ export default function EnrollmentForm({ lead, onComplete, onCancel,  }: Enrollm
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    
+
     if (name === 'parentsPhoneNumbers') {
       setFormData(prev => ({
         ...prev,
@@ -254,68 +435,62 @@ export default function EnrollmentForm({ lead, onComplete, onCancel,  }: Enrollm
     }));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
+  const validateForm = async (): Promise<boolean> => {
+    // Basic field validation
+    if (!formData.studentName || !formData.phoneNumber || !formData.email || !formData.studentUsername || !formData.password) {
+      alert('Please fill in all required fields');
+      return false;
+    }
 
+    if (!formData.age || formData.age <= 0) {
+      alert('Please enter a valid age');
+      return false;
+    }
+
+    if (!formData.city || !formData.address) {
+      alert('Please fill in city and address');
+      return false;
+    }
+
+    // Check for duplicates (email, phone, username)
     try {
-      // Validate required fields
-      if (!formData.studentName || !formData.phoneNumber || !formData.email || !formData.studentUsername || !formData.password) {
-        alert('Please fill in all required fields');
-        return;
-      }
-
-      if (!formData.age || formData.age <= 0) {
-        alert('Please enter a valid age');
-        return;
-      }
-
-      if (!formData.city || !formData.address) {
-        alert('Please fill in city and address');
-        return;
-      }
-
-      // For new students, check if email/phone/username already exists
-      if (!isEditing) {
-        const checkResponse = await fetch('http://localhost:6969/api/students');
-        if (checkResponse.ok) {
-          const checkData = await checkResponse.json();
-          if (checkData.success && checkData.data) {
-            const duplicateStudent = checkData.data.find(
-              (student: any) => 
+      const response = await fetch('http://localhost:6969/api/students');
+      if (response.ok) {
+        const data: StudentsResponse = await response.json();
+        if (data.success && data.data) {
+          const duplicateStudent = data.data.find(
+            (student: Enrollment) =>
+              student._id !== existingStudentId && // Exclude current student when editing
+              (
                 (student.email && student.email.toLowerCase() === formData.email.toLowerCase()) ||
                 (student.phoneNumber && student.phoneNumber === formData.phoneNumber) ||
                 (student.studentUsername && student.studentUsername.toLowerCase() === formData.studentUsername.toLowerCase())
-            );
-            
-            if (duplicateStudent) {
-              alert('A student with this email, phone number, or username already exists');
-              return;
-            }
+              )
+          );
+
+          if (duplicateStudent) {
+            alert('A student with this email, phone number, or username already exists');
+            return false;
           }
         }
-      } else {
-        // For editing, check if email/phone/username conflicts with other students (excluding current student)
-        const checkResponse = await fetch('http://localhost:6969/api/students');
-        if (checkResponse.ok) {
-          const checkData = await checkResponse.json();
-          if (checkData.success && checkData.data) {
-            const duplicateStudent = checkData.data.find(
-              (student: any) => 
-                student._id !== existingStudentId && // Exclude current student
-                (
-                  (student.email && student.email.toLowerCase() === formData.email.toLowerCase()) ||
-                  (student.phoneNumber && student.phoneNumber === formData.phoneNumber) ||
-                  (student.studentUsername && student.studentUsername.toLowerCase() === formData.studentUsername.toLowerCase())
-                )
-            );
-            
-            if (duplicateStudent) {
-              alert('Another student with this email, phone number, or username already exists');
-              return;
-            }
-          }
-        }
+      }
+    } catch (error) {
+      console.error('Error checking for duplicates:', error);
+    }
+
+    return true;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+
+    try {
+      // Validate form
+      const isValid = await validateForm();
+      if (!isValid) {
+        return;
       }
 
       // Prepare the data to submit
@@ -330,10 +505,10 @@ export default function EnrollmentForm({ lead, onComplete, onCancel,  }: Enrollm
       const url = isEditing && existingStudentId
         ? `http://localhost:6969/api/students/${existingStudentId}`
         : 'http://localhost:6969/api/students';
-      
+
       const method = isEditing ? 'PUT' : 'POST';
 
-      console.log('Submitting data:', submitData);
+      console.log('Submitting enrollment data:', submitData);
       console.log('URL:', url);
       console.log('Method:', method);
 
@@ -346,44 +521,101 @@ export default function EnrollmentForm({ lead, onComplete, onCancel,  }: Enrollm
         body: JSON.stringify(submitData),
       });
 
-      const data = await response.json();
-      console.log('Response data:', data);
-      
-      // Check for successful creation (201) or update (200)
-      if (response.status === 201 || response.status === 200) {
-        // Update lead status to converted
-        try {
-          const leadUpdateResponse = await fetch(`http://localhost:6969/api/leads/${lead._id}`, {
-            method: 'PUT',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ status: 'converted' }),
-          });
-          
-          if (!leadUpdateResponse.ok) {
-            console.error('Failed to update lead status');
+      const responseData = await response.json();
+      console.log('Enrollment response:', responseData);
+
+      if (!response.ok) {
+        throw new Error(responseData.message || responseData.error || `Failed to ${isEditing ? 'update' : 'enroll'} student`);
+      }
+
+      const studentId = responseData._id;
+      if (!studentId) {
+        throw new Error('Failed to get student ID from response');
+      }
+
+      // Handle subjects one by one
+      try {
+        console.log('Starting to handle subjects:', subjects);
+        
+        // Process each subject sequentially
+        for (const subject of subjects) {
+          // Format time slots properly
+          let formattedTimeSlots: string[] = [];
+
+          if (Array.isArray(subject.timeSlots)) {
+            // If it's already an array, ensure all elements are strings
+            formattedTimeSlots = subject.timeSlots
+              .map((slot: string) => typeof slot === 'string' ? slot.trim() : String(slot))
+              .filter((slot: string) => slot !== '');
+          } else if (typeof subject.timeSlots === 'string') {
+            // If it's a string, split by comma and trim each slot
+            formattedTimeSlots = subject.timeSlots
+              .split(',')
+              .map((slot: string) => slot.trim())
+              .filter((slot: string) => slot !== '');
           }
-        } catch (error) {
-          console.error('Error updating lead status:', error);
+
+          const subjectData = {
+            student: studentId,
+            board: subject.board,
+            class: subject.class,
+            subject: subject.subject,
+            numberOfClassesPerWeek: subject.numberOfClassesPerWeek,
+            teacher: subject.teacher,
+            timeSlots: formattedTimeSlots,
+            paymentDetails: {
+              classAmount: subject.paymentDetails.classAmount,
+              amountPaid: subject.paymentDetails.amountPaid || 0,
+              lastPayments: []
+            },
+            remarks: []
+          };
+
+          console.log('Sending subject data:', subjectData);
+
+          const subjectResponse = await fetch('http://localhost:6969/api/subject/add', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(subjectData),
+          });
+
+          if (!subjectResponse.ok) {
+            const errorData = await subjectResponse.json();
+            throw new Error(errorData.error || `Failed to save subject: ${subjectResponse.statusText}`);
+          }
+
+          const subjectResponseData = await subjectResponse.json();
+          console.log('Subject save response:', subjectResponseData);
         }
 
-        alert(`Student ${isEditing ? 'updated' : 'enrolled'} successfully!`);
-        onComplete();
-        return;
+        console.log('All subjects saved successfully');
+      } catch (error) {
+        console.error('Error handling subjects:', error);
       }
 
-      // Handle error cases
-      if (!response.ok) {
-        throw new Error(data.message || data.error || `Failed to ${isEditing ? 'update' : 'enroll'} student`);
+      // Update lead status to converted
+      try {
+        const leadUpdateResponse = await fetch(`http://localhost:6969/api/leads/editlead/${lead._id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ status: 'converted' }),
+        });
+
+        if (!leadUpdateResponse.ok) {
+          console.error('Failed to update lead status');
+        }
+      } catch (error) {
+        console.error('Error updating lead status:', error);
       }
 
-      if (!data.success) {
-        throw new Error(data.message || data.error || `Failed to ${isEditing ? 'update' : 'enroll'} student`);
-      }
+      alert(`Student ${isEditing ? 'updated' : 'enrolled'} successfully!`);
+      onComplete();
+      return;
     } catch (error) {
-      console.error('Error:', error);
-      alert(error instanceof Error ? error.message : `An error occurred while ${isEditing ? 'updating' : 'enrolling'} the student`);
+      console.error('Error in handleSubmit:', error);
+      setError(error instanceof Error ? error.message : 'An error occurred');
     } finally {
       setLoading(false);
     }
@@ -604,6 +836,97 @@ export default function EnrollmentForm({ lead, onComplete, onCancel,  }: Enrollm
               </div>
             </div>
           </div>
+
+
+
+
+         {/* Replace your existing subjects section with this new version */}
+      <div className="space-y-4 mt-4">
+        <div className="flex justify-between items-center">
+          <h3 className="text-lg font-medium">Subjects</h3>
+          <button
+            type="button"
+            onClick={addNewSubject}
+            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+          >
+            Add Subject
+          </button>
+        </div>
+        
+        {subjects.map((subject, index) => (
+          <div key={index} className="border p-4 rounded-lg">
+            <div className="flex justify-between items-center mb-4">
+              <h4 className="text-md font-medium">Subject {index + 1}</h4>
+              <button
+                type="button"
+                onClick={() => removeSubject(index)}
+                className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600"
+              >
+                Remove
+              </button>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Subject</label>
+                <input
+                  type="text"
+                  value={subject.subject}
+                  onChange={(e) => handleSubjectChange(index, 'subject', e.target.value)}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Teacher</label>
+                <input
+                  type="text"
+                  value={subject.teacher}
+                  onChange={(e) => handleSubjectChange(index, 'teacher', e.target.value)}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Classes Per Week</label>
+                <input
+                  type="number"
+                  value={subject.numberOfClassesPerWeek}
+                  onChange={(e) => handleSubjectChange(index, 'numberOfClassesPerWeek', parseInt(e.target.value))}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Time Slots</label>
+                <input
+                  type="text"
+                  value={Array.isArray(subject.timeSlots) ? subject.timeSlots.join(', ') : subject.timeSlots}
+                  onChange={(e) => handleSubjectChange(index, 'timeSlots', e.target.value.split(',').map(slot => slot.trim()))}
+                  placeholder="Enter time slots separated by commas (e.g., Monday 3:00 PM, Wednesday 4:00 PM)"
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Class Amount</label>
+                <input
+                  type="number"
+                  value={subject.paymentDetails.classAmount}
+                  onChange={(e) => handleSubjectChange(index, 'paymentDetails.classAmount', parseInt(e.target.value))}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Amount Paid</label>
+                <input
+                  type="number"
+                  value={subject.paymentDetails.amountPaid}
+                  onChange={(e) => handleSubjectChange(index, 'paymentDetails.amountPaid', parseInt(e.target.value))}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+  
         </div>
 
         <div className="flex justify-end space-x-4">
