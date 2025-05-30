@@ -56,7 +56,31 @@ export default function TeacherForm({onSuccess}){
      }
 
      const validate =()=>{
-        const newErrors : Partial<Record<keyoof TeacherData, string>> = {}
+        const newErrors : Partial<Record<keyof TeacherData, string>> = {};
+
+        if(!formData.teacherName){
+            newErrors.teacherName ='Teacher name is required';
+            
+        }
+        else if(formData.teacherName.length < 3){
+            newErrors.teacherName= 'Teacher name must be at least 3 charaxhetrs';
+        }
+
+        if(!formData.teacherPhone){
+            newErrors.teacherPhone ='Teacher phone must be exactly 10 digits';
+        }
+        else if(!/^\d{10}$/.test(formData.teacherPhone)){
+            newErrors.teacherPhone = 'Teacher phone must be exactly 10 digits';
+        }
+
+        if(!formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+            newErrors.email = 'Invalid email address';
+        }
+
+        if(!formData.board){
+            newErrors.board = 'Board is required' 
+        }
+
      }
 
     
