@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import EditEnrollmentForm from './enrollmentEdit';
 
 interface Enrollment {
   _id: string;
@@ -219,8 +220,9 @@ export default function EnrollmentList() {
               </svg>
             </button>
           </div>
-          {/* You would import and use EditEnrollmentForm here */}
-          <div className="p-4 bg-gray-100 rounded">
+          <EditEnrollmentForm studentId={editingEnrollment._id} onComplete={handleEditComplete} />
+          {/* You would import and use EditEnrollmentForm here *
+          {/* <div className="p-4 bg-gray-100 rounded">
             <p>Edit Enrollment Form Component would go here</p>
             <button 
               onClick={handleEditComplete}
@@ -228,7 +230,7 @@ export default function EnrollmentList() {
             >
               Save Changes
             </button>
-          </div>
+          </div> */}
         </div>
       ) : (
         <>

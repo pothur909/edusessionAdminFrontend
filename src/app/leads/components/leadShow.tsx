@@ -473,8 +473,8 @@ export default function LeadsList() {
     <div className="space-y-6 text-black m-9">
       {/* Edit Form */}
       {showEditForm && editingLead ? (
-        <div className="bg-white rounded-lg shadow-lg p-6">
-          <div className="flex justify-between items-center mb-6">
+        <div className="p-3">
+          <div className="flex justify-between items-center mb-2">
             <h2 className="text-2xl font-bold text-black">Edit Lead</h2>
             <button
               onClick={handleEditCancel}
@@ -488,9 +488,9 @@ export default function LeadsList() {
           <EditLeadForm lead={editingLead} onComplete={handleEditComplete} />
         </div>
       ) : bookDemoForm && editingLead ? (
-        <div className="bg-white rounded-lg shadow-lg p-6">
+        <div className="p-3">
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold text-black">Schedule Demo - {editingLead.studentName}</h2>
+            <h2 className="text-2xl font-bold text-black">Name : {editingLead.studentName}</h2>
             <button
               onClick={() => {
                 setBookDemoForm(false);
