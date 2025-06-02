@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import EditEnrollmentForm from './enrollmentEdit';
+import EditEnrollmentForm from './EnrollmentEdit';
 
 interface Enrollment {
   _id: string;
@@ -350,13 +350,13 @@ export default function EnrollmentList() {
                             >
                               Edit
                             </button>
-                            <button
+                            {/* <button
                               onClick={() => handleDeleteEnrollment(enrollment._id)}
                               disabled={deleteLoading === enrollment._id}
                               className="text-red-600 hover:text-red-900 disabled:opacity-50"
                             >
                               {deleteLoading === enrollment._id ? 'Deleting...' : 'Delete'}
-                            </button>
+                            </button> */}
                           </div>
                         </td>
                       </tr>

@@ -3,24 +3,7 @@
 'use client';
 
 import { useState } from 'react';
-import { BoardData } from '../boardData';
-
-// Mock BoardDataUtils for demonstration
-const BoardDataUtils = {
-  getBoards: () => ['CBSE', 'ICSE', 'State Board', 'IB'],
-  getClassesForBoard: (board) => {
-    const classes = {
-      'CBSE': ['Class 1', 'Class 2', 'Class 3', 'Class 4', 'Class 5', 'Class 6', 'Class 7', 'Class 8', 'Class 9', 'Class 10', 'Class 11', 'Class 12'],
-      'ICSE': ['Class 1', 'Class 2', 'Class 3', 'Class 4', 'Class 5', 'Class 6', 'Class 7', 'Class 8', 'Class 9', 'Class 10', 'Class 11', 'Class 12'],
-      'State Board': ['Class 1', 'Class 2', 'Class 3', 'Class 4', 'Class 5', 'Class 6', 'Class 7', 'Class 8', 'Class 9', 'Class 10', 'Class 11', 'Class 12'],
-      'IB': ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12']
-    };
-    return classes[board] || [];
-  },
-  getSubjectsForBoardAndClass: (board, className) => {
-    return ['Mathematics', 'Science', 'English', 'Social Studies', 'Hindi', 'Physics', 'Chemistry', 'Biology'];
-  }
-};
+import { BoardDataUtils } from '../boardData';
 
 interface Lead {
   _id: string;
@@ -61,31 +44,10 @@ const STATUSES = [
   'no_response_from_Lead'
 ];
 
-// Mock lead data for demonstration
-const mockLead: Lead = {
-  _id: '1',
-  studentName: 'John Doe',
-  studentPhone: '9876543210',
-  parentPhone: '9876543211',
-  email: 'john.doe@email.com',
-  board: 'CBSE',
-  class: 'Class 10',
-  subjects: ['Mathematics', 'Physics'],
-  status: 'contacted',
-  notes: 'Student is interested in advanced mathematics',
-  createdAt: '2024-01-15',
-  updatedAt: '2024-01-15',
-  leadSource: 'website',
-  classesPerWeek: 3,
-  courseInterested: 'Advanced Mathematics',
-  modeOfContact: 'phone',
-  preferredTimeSlots: '16:00',
-  counsellor: 'Sarah Wilson',
-  sessionEndDate: '2024-06-15',
-  remarks: 'Highly motivated student'
-};
 
-export default function EditLeadForm({ lead = mockLead, onComplete }: EditLeadFormProps) {
+
+
+export default function EditLeadForm({ lead, onComplete }: EditLeadFormProps) {
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState(lead);
 

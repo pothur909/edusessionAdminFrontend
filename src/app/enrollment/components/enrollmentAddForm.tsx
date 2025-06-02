@@ -28,18 +28,6 @@ interface Lead {
   demo?: Demo | null; // Add this for demo data
 }
 
-// First, define the PaymentDetails interface
-// interface PaymentDetails {
-//   classAmount: number;
-//   amountPaid: number;
-//   lastPayments: Array<{
-//     paymentId: string;
-//     date: Date;
-//     amount: number;
-//   }>;
-// }
-
-
 interface Subject {
   student: string; // This will be the ObjectId reference
   board: string;
