@@ -1,7 +1,7 @@
 
 'use client';
 
-import LeadForm from "../components/LeadAdd";
+import LeadForm from "../components/leadAdd";
 
 export default function AddLead() {
 

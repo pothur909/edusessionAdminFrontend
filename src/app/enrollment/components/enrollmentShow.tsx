@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import EditEnrollmentForm from './EnrollmentEdit';
+import EditEnrollmentForm from './enrollmentEdit';
 
 interface Enrollment {
   _id: string;

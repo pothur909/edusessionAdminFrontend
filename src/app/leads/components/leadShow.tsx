@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import EditLeadForm from "./LeadEdit";
-import DemoLeadForm from "../../demo/components/DemoForm";
-import EnrollmentForm from "@/app/enrollment/components/EnrollmentAddForm";
+import EditLeadForm from "./leadEdit";
+import DemoLeadForm from "../../demo/components/demoForm";
+import EnrollmentForm from "@/app/enrollment/components/enrollmentAddForm";
 
 interface Demo {
   _id: string;
