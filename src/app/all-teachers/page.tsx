@@ -40,7 +40,7 @@ const TeacherListPage = () => {
   // Handle edit button click
   const handleEditClick = (teacherId: string) => {
     // Redirect to edit page or open a modal
-    window.location.href = `/teachers/edit/${teacherId}`;
+    window.location.href = `/all-teachers/edit/${teacherId}`;
   };
 
   return (

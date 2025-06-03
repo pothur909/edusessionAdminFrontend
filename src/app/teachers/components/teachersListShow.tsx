@@ -325,6 +325,9 @@ const TeachersListShow = () => {
       setOpenAppointDialog(false);
       setTeacherToAppoint(null);
       fetchTeachers();
+      
+      // Redirect to create-teacher-cred route
+      router.push(`/create-teacher-cred?id=${teacherToAppoint._id}`);
     } catch (error) {
       console.error('Error appointing teacher:', error);
       setSnackbar({
