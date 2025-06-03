@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import EditEnrollmentForm from './enrollmentEdit';
 
@@ -30,8 +29,6 @@ interface EnrollmentResponse {
   data?: Enrollment[];
 }
 
-
-
 export default function EnrollmentList() {
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -41,6 +38,7 @@ export default function EnrollmentList() {
   const [deleteLoading, setDeleteLoading] = useState<string | null>(null);
   const [editingEnrollment, setEditingEnrollment] = useState<Enrollment | null>(null);
   const [showEditForm, setShowEditForm] = useState(false);
+  const baseUrl =process.env. BASE_URL;
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
@@ -56,7 +54,7 @@ export default function EnrollmentList() {
       setIsLoading(true);
       setError(null);
       
-      const url = `http://localhost:6969/api/students${activeTab !== 'all' ? `?status=${activeTab}` : ''}`;
+      const url = `${baseUrl}/api/students${activeTab !== 'all' ? `?status=${activeTab}` : ''}`;
       console.log('Fetching enrollments from:', url);
       
       const response = await fetch(url);
@@ -96,7 +94,7 @@ export default function EnrollmentList() {
 
     try {
       setDeleteLoading(enrollmentId);
-      const response = await fetch(`http://localhost:6969/api/students/${enrollmentId}`, {
+      const response = await fetch(`${baseUrl}/api/students/${enrollmentId}`, {
         method: 'DELETE',
       });
 
@@ -297,6 +295,7 @@ export default function EnrollmentList() {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Enrolled</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Book a Demo</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -357,6 +356,17 @@ export default function EnrollmentList() {
                             >
                               {deleteLoading === enrollment._id ? 'Deleting...' : 'Delete'}
                             </button> */}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <div className="flex flex-col items-start gap-1">
+                            <button
+                              onClick={() => handleBookDemoClick()}
+                              className="text-blue-600 hover:text-blue-900"
+                            >
+                              Demo
+                            </button>
+                          
                           </div>
                         </td>
                       </tr>

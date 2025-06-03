@@ -118,7 +118,7 @@ const TeachersListShow = () => {
   const [openAppointDialog, setOpenAppointDialog] = useState(false);
   const [teacherToAppoint, setTeacherToAppoint] = useState<Teacher | null>(null);
 
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL||"http://localhost:6969";
+  const baseUrl =process.env. BASE_URL||"http://localhost:6969";
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setSelectedTab(newValue);

@@ -64,7 +64,7 @@ type FormErrors = Partial<Record<keyof TeacherData, string>> & {
 
 const statusOptions = ['new', 'interview', 'interviewdone', 'contacted', 'rejected', 'rejectafterinterview', 'appointed'] as const;
 
-const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:6969';
+const baseUrl =process.env. BASE_URL || 'http://localhost:6969';
 
 export default function TeacherForm({ initialData, onSuccess, onError, isEdit = false }: TeacherFormProps) {
   const router = useRouter();

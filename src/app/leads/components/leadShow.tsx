@@ -24,7 +24,7 @@ interface Demo {
     | "demo_rescheduled_cancelled"
     | "demo_rescheduled_completed"
     | "demo_rescheduled_no_show";
-  remarks: string;
+  remarks: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -43,15 +43,8 @@ interface Lead {
     | "contacted"
     | "converted"
     | "not_interested"
-    | "demo_scheduled"
-    | "demo_completed"
-    | "demo_cancelled"
-    | "demo_no_show"
-    | "demo_rescheduled"
-    | "demo_rescheduled_cancelled"
-    | "demo_rescheduled_completed"
-    | "demo_rescheduled_no_show"
-    | "no_response_from_Lead";
+    | "follow_up"
+    | "interested";
   notes: string;
   createdAt: string;
   updatedAt: string;
@@ -61,7 +54,7 @@ interface Lead {
   modeOfContact: string;
   counsellor: string;
   sessionEndDate?: string;
-  remarks: string;
+  remarks: string[];
   existingStudentId?: string; // Add this for existing student reference
   preferredTimeSlots?: string; // Add this
   city?: string; // Add this
@@ -143,20 +136,16 @@ export default function LeadsList() {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<
-    | "all"
-    | "new"
-    | "contacted"
-    | "converted"
-    | "not_interested"
-    | "demo_scheduled"
-    | "demo_completed"
-    | "demo_cancelled"
-    | "demo_no_show"
-    | "demo_rescheduled"
-    | "demo_rescheduled_cancelled"
-    | "demo_rescheduled_completed"
-    | "demo_rescheduled_no_show"
-    | "no_response_from_Lead"
+    "all" | "new" | "contacted" | "converted" | "not_interested" | "follow_up"
+    // | "demo_scheduled"
+    // | "demo_completed"
+    // | "demo_cancelled"
+    // | "demo_no_show"
+    // | "demo_rescheduled"
+    // | "demo_rescheduled_cancelled"
+    // | "demo_rescheduled_completed"
+    // | "demo_rescheduled_no_show"
+    // | "no_response_from_Lead"
   >("all");
   const [deleteLoading, setDeleteLoading] = useState<string | null>(null);
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
@@ -178,16 +167,54 @@ export default function LeadsList() {
     fetchEnrolledStudents(); // Add this line to fetch enrolled students on component mount
   }, [activeTab]);
 
+  const baseUrl =process.env. BASE_URL;
+
+  // const fetchLeads = async () => {
+  //   try {
+  //     const response = await fetch(
+  //       `${baseUrl}/api/leads/viewleads${
+  //         activeTab !== "all" ? `?status=${activeTab}` : ""
+  //       }`
+  //     );
+  //     const data = await response.json();
+  //     if (data.success) {
+  //       setLeads(data.data);
+  //     } else {
+  //       setError(data.message || "Failed to fetch leads");
+  //     }
+  //   } catch (error) {
+  //     setError("An error occurred while fetching leads");
+  //   } finally {
+  //     setIsLoading(false);
+  //   }
+  // };
+
+  // Just replace your fetchLeads function with this:
   const fetchLeads = async () => {
     try {
       const response = await fetch(
-        `http://localhost:6969/api/leads/viewleads${
+        `${baseUrl}/api/leads/viewleads${
           activeTab !== "all" ? `?status=${activeTab}` : ""
         }`
       );
       const data = await response.json();
       if (data.success) {
-        setLeads(data.data);
+        // Add demo data to each lead
+        const leadsWithDemos = await Promise.all(
+          data.data.map(async (lead: Lead) => {
+            try {
+              const demoResponse = await fetch(
+                `${baseUrl}/api/demo/view/${lead._id}`
+              );
+              const demoData = await demoResponse.json();
+              lead.demo = demoData.demos?.[0] || null;
+            } catch (error) {
+              lead.demo = null;
+            }
+            return lead;
+          })
+        );
+        setLeads(leadsWithDemos);
       } else {
         setError(data.message || "Failed to fetch leads");
       }
@@ -200,7 +227,7 @@ export default function LeadsList() {
 
   const fetchEnrolledStudents = async () => {
     try {
-      const response = await fetch("http://localhost:6969/api/students");
+      const response = await fetch(`${baseUrl}/api/students`);
       const data = await response.json();
       if (data.success) {
         setEnrolledStudents(data.data || []);
@@ -215,9 +242,7 @@ export default function LeadsList() {
     studentId: string
   ): Promise<Enrollment | null> => {
     try {
-      const response = await fetch(
-        `http://localhost:6969/api/students/${studentId}`
-      );
+      const response = await fetch(`${baseUrl}/api/students/${studentId}`);
       const data = await response.json();
       if (data.success) {
         return data.data;
@@ -249,12 +274,9 @@ export default function LeadsList() {
 
     try {
       setDeleteLoading(leadId);
-      const response = await fetch(
-        `http://localhost:6969/api/leads/deleteled/${leadId}`,
-        {
-          method: "DELETE",
-        }
-      );
+      const response = await fetch(`${baseUrl}/api/leads/deleteled/${leadId}`, {
+        method: "DELETE",
+      });
 
       const data = await response.json();
       if (data.success) {
@@ -290,16 +312,14 @@ export default function LeadsList() {
         time: "",
         subject: "",
         status: "demo_scheduled",
-        remarks: "",
+        remarks: [],
         board: lead.board || "",
         class: lead.class || "",
       };
 
       // Try to fetch existing demo data, but don't throw error if none exists
       try {
-        const response = await fetch(
-          `http://localhost:6969/api/demo/view/${lead._id}`
-        );
+        const response = await fetch(`${baseUrl}/api/demo/view/${lead._id}`);
         const data: DemoResponse = await response.json();
         console.log("Demo data from API:", data);
 
@@ -349,8 +369,8 @@ export default function LeadsList() {
       // Fetch both enrollment and demo data in parallel
       try {
         const [enrollmentResponse, demoResponse] = await Promise.all([
-          fetch("http://localhost:6969/api/students"),
-          fetch(`http://localhost:6969/api/demo/view/${lead._id}`),
+          fetch(`${baseUrl}/api/students`),
+          fetch(`${baseUrl}/api/demo/view/${lead._id}`),
         ]);
 
         const enrollmentData = await enrollmentResponse.json();
@@ -376,7 +396,7 @@ export default function LeadsList() {
             // Fetch subjects for this student
             try {
               const subjectsResponse = await fetch(
-                `http://localhost:6969/api/subject/${existingStudent._id}`
+                `${baseUrl}/api/subject/${existingStudent._id}`
               );
               const subjectsData = await subjectsResponse.json();
               console.log("Subjects response:", subjectsData);
@@ -664,11 +684,11 @@ export default function LeadsList() {
                 { key: "contacted", label: "Contacted" },
                 { key: "converted", label: "Converted" },
                 { key: "not_interested", label: "Not Interested" },
-                { key: "demo_scheduled", label: "Demo Scheduled" },
-                { key: "demo_completed", label: "Demo Completed" },
-                { key: "demo_cancelled", label: "Demo Cancelled" },
-                { key: "demo_no_show", label: "Demo No Show" },
-                { key: "no_response_from_Lead", label: "No Response" },
+                { key: "follow_up", label: "Follow Up" },
+                // { key: "demo_completed", label: "Demo Completed" },
+                // { key: "demo_cancelled", label: "Demo Cancelled" },
+                // { key: "demo_no_show", label: "Demo No Show" },
+                // { key: "no_response_from_Lead", label: "No Response" },
               ].map((tab) => (
                 <button
                   key={tab.key}
@@ -687,7 +707,6 @@ export default function LeadsList() {
               ))}
             </nav>
           </div>
-
 
           {/* Pagination Controls */}
           {filteredLeads.length > itemsPerPage && (
@@ -827,7 +846,7 @@ export default function LeadsList() {
                       Details
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
+                      Lead Status
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Created
@@ -837,6 +856,9 @@ export default function LeadsList() {
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Demo
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Demo Status
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Enrollment
@@ -927,6 +949,20 @@ export default function LeadsList() {
                             >
                               Book Demo
                             </button>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            {lead.demo ? (
+                              <span
+                                className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(
+                                  lead.demo.status
+                                )}`}
+                              >
+                                {lead.demo.status.charAt(0).toUpperCase() +
+                                  lead.demo.status.slice(1).replace(/_/g, " ")}
+                              </span>
+                            ) : (
+                              <span className="text-gray-500">No Demo</span>
+                            )}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                             {isStudentEnrolled(lead) ? (
