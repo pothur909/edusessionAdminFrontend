@@ -51,6 +51,8 @@ export default function EditLeadForm({ lead, onComplete }: EditLeadFormProps) {
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState(lead);
 
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+
   // Get available classes for selected board
   const getAvailableClasses = () => {
     return BoardDataUtils.getClassesForBoard(formData.board);
@@ -107,7 +109,7 @@ export default function EditLeadForm({ lead, onComplete }: EditLeadFormProps) {
     e.preventDefault();
     setLoading(true);
        try {
-      const response = await fetch(`http://localhost:6969/api/leads/editlead/${lead._id}`, {
+      const response = await fetch(`${baseUrl}/api/leads/editlead/${lead._id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

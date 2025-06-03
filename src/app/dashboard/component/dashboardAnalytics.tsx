@@ -103,7 +103,7 @@ export default function AnalyticsDashboard() {
   const years = Array.from({ length: 10 }, (_, i) => currentYear - i);
 
   // Base API URL - update this to match your backend
-  const API_BASE_URL = 'http://localhost:6969/api';
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ;
 
   useEffect(() => {
     fetchDashboardData();
@@ -116,8 +116,8 @@ export default function AnalyticsDashboard() {
 
       // Fetch leads and enrollments from your API
       const [leadsResponse, enrollmentsResponse] = await Promise.all([
-        fetch(`${API_BASE_URL}/leads/viewleads`), // Update this endpoint to match your leads API
-        fetch(`${API_BASE_URL}/students`) // This matches your existing students endpoint
+        fetch(`${baseUrl}/api/leads/viewleads`), // Update this endpoint to match your leads API
+        fetch(`${baseUrl}/api/students`) // This matches your existing students endpoint
       ]);
 
       if (!leadsResponse.ok || !enrollmentsResponse.ok) {

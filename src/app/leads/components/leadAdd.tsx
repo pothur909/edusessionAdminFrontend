@@ -45,6 +45,9 @@ export default function LeadForm() {
     remarks: '',
     notes: '',
   });
+     
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+
 
   const [errors, setErrors] = useState<Partial<Record<keyof LeadData, string>>>({});
   const [loading, setLoading] = useState(false);
@@ -211,7 +214,7 @@ export default function LeadForm() {
     }
     try {
       setLoading(true);
-      const response = await fetch('http://localhost:6969/api/leads/addlead', {
+      const response = await fetch(`${baseUrl}/api/leads/addlead`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

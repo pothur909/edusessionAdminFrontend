@@ -3,9 +3,9 @@
 
 import { useState } from 'react';
 
-export default function TeacherForm({onSuccess}){
+export default function TeacherForm(){
     
-    interface TeacherData{
+       interface TeacherData{
         teacherName: string;
         teacherPhone: string;
         email: string;
@@ -47,12 +47,6 @@ export default function TeacherForm({onSuccess}){
 
      const handleChange =(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>{
         const {name, value, type} = e.target;
-    //    setFormData(prev =>{
-    //     let newFormData;
-
-    //     if
-    //    })
-
      }
 
      const validate =()=>{
@@ -80,7 +74,6 @@ export default function TeacherForm({onSuccess}){
         if(!formData.board){
             newErrors.board = 'Board is required' 
         }
-
      }
 
     
