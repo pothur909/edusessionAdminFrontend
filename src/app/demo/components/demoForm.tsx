@@ -1,463 +1,3 @@
-// 'use client';
-
-// import { useEffect, useState } from 'react';
-// import { useRouter, useSearchParams } from 'next/navigation';
-
-// interface Lead {
-//   _id: string;
-//   studentName: string;
-//   studentPhone: string;
-//   parentPhone: string;
-//   email: string;
-//   board: string;
-//   class: string;
-//   subjects: string[];
-//   status: string;
-//   notes: string;
-//   createdAt: string;
-//   updatedAt: string;
-//   leadSource: string;
-//   classesPerWeek: number;
-//   courseInterested: string;
-//   modeOfContact: string;
-//   preferredTimeSlots:string;
-//   counsellor: string;
-//   sessionEndDate: string;
-//   remarks: string;
-// }
-
-// interface Demo {
-//   _id?: string;
-//   lead: string;
-//   date: string;
-//   time: string;
-//   teacher: string;
-//   board: string;
-//   class: string;
-//   subject: string;
-//   status: 'demo_scheduled' | 'demo_completed' | 'demo_cancelled' | 'demo_no_show' | 'demo_rescheduled' | 'demo_rescheduled_cancelled' | 'demo_rescheduled_completed' | 'demo_rescheduled_no_show';
-//   remarks: string;
-//     preferredTimeSlots:string;
-
-// }
-
-// interface DemoResponse {
-//   success: boolean;
-//   message: string;
-//   demos?: Demo[];
-//   lead?: Lead;
-// }
-
-// interface DemoLeadFormProps {
-//   lead: Lead;
-//   onComplete: () => void;
-//   onCancel: () => void;
-// }
-
-// export default function DemoLeadForm({ lead, onComplete, onCancel }: DemoLeadFormProps) {
-//   const router = useRouter();
-//   const [loading, setLoading] = useState(false);
-//   const [formData, setFormData] = useState<Demo>({
-//     lead: lead._id,
-//     date: '',
-//     time: '',
-//     teacher: '',
-//     board: lead.board || '',
-//     class: lead.class || '',
-//     subject: '',
-//     status: 'demo_scheduled',
-//     remarks: '',
-//     preferredTimeSlots: lead.preferredTimeSlots || '', 
-
-//   });
-
-//   // Add state for lead data with default values
-//   const [leadData, setLeadData] = useState<Lead>({
-//     ...lead,
-//     subjects: lead.subjects || [],
-//     board: lead.board || '',
-//     class: lead.class || '',
-//     status: lead.status || 'new'
-//   });
-
-//   useEffect(() => {
-//     const fetchDemo = async () => {
-//       if (!lead._id) {
-//         console.error('No lead ID available');
-//         return;
-//       }
-
-//       try {
-//         // First fetch lead data to ensure we have latest subjects
-//         const leadResponse = await fetch(`http://localhost:6969/api/leads/viewleads`);
-//         const leadData = await leadResponse.json();
-//         if (leadData.success) {
-//           const updatedLead = leadData.data.find((l: Lead) => l._id === lead._id);
-//           if (updatedLead) {
-//             setLeadData({
-//               ...updatedLead,
-//               subjects: updatedLead.subjects || []
-//             });
-//           }
-//         }
-
-//         // Then fetch demo data
-//         const response = await fetch(`http://localhost:6969/api/demo/view/${lead._id}`);
-//         const data: DemoResponse = await response.json();
-//         console.log('Demo fetch response:', data);
-
-//         if (data.success) {
-//           // Update demo data if available
-//           if (data.demos && data.demos.length > 0) {
-//             const existingDemo = data.demos[0]; // Get the most recent demo
-//             setFormData({
-//               _id: existingDemo._id,
-//               lead: lead._id,
-//               date: existingDemo.date ? new Date(existingDemo.date).toISOString().split('T')[0] : '',
-//               time: existingDemo.time || '',
-//               teacher: existingDemo.teacher || '',
-//               board: existingDemo.board || lead.board || '',
-//               class: existingDemo.class || lead.class || '',
-//               subject: existingDemo.subject || '',
-//               status: existingDemo.status || 'demo_scheduled',
-//               remarks: existingDemo.remarks || '',
-//               preferredTimeSlots: lead.preferredTimeSlots || '',
-            
-//             });
-//           }
-//         }
-//       } catch (error) {
-//         console.error('Error fetching data:', error);
-//       }
-//     };
-
-//     fetchDemo();
-//   }, [lead._id]);
-
-//   const handleChange = (
-//     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
-//   ) => {
-//     const { name, value } = e.target;
-    
-//     // Handle lead data changes
-//     if (name in leadData) {
-//       setLeadData(prev => ({ ...prev, [name]: value }));
-//     }
-    
-//     // Handle demo data changes
-//     if (name in formData) {
-//       setFormData(prev => ({ ...prev, [name]: value }));
-
-//       // If status is changed, update lead status as well
-//       if (name === 'status') {
-//         setLeadData(prev => ({ ...prev, status: value }));
-//       }
-//     }
-//   };
-
-//   const handleSubmit = async (e: React.FormEvent) => {
-//     e.preventDefault();
-//     setLoading(true);
-
-//     try {
-//       // Validate required fields
-//       if (!formData.subject || !formData.date || !formData.time) {
-//         alert('Please fill in all required fields (Subject, Date, and Time)');
-//         return;
-//       }
-
-//       // First update lead data with the new status
-//       const leadResponse = await fetch(`http://localhost:6969/api/leads/editlead/${lead._id}`, {
-//         method: 'PUT',
-//         headers: {
-//           'Content-Type': 'application/json',
-//         },
-//         body: JSON.stringify({
-//           ...leadData,
-//           status: formData.status // Ensure lead status matches demo status
-//         }),
-//       });
-
-//       if (!leadResponse.ok) {
-//         throw new Error(`Failed to update lead: ${leadResponse.statusText}`);
-//       }
-
-//       const leadResult = await leadResponse.json();
-//       if (!leadResult.success) {
-//         throw new Error(leadResult.message || 'Failed to update lead');
-//       }
-
-//       // Then update/create demo
-//       const url = formData._id 
-//         ? `http://localhost:6969/api/demo/edit/${formData._id}`
-//         : 'http://localhost:6969/api/demo/add';
-      
-//       const method = formData._id ? 'PUT' : 'POST';
-      
-//       console.log('Submitting demo data:', formData);
-
-//       const response = await fetch(url, {
-//         method,
-//         headers: {
-//           'Content-Type': 'application/json',
-//         },
-//         body: JSON.stringify(formData),
-//       });
-
-//       if (!response.ok) {
-//         throw new Error(`Failed to save demo: ${response.statusText}`);
-//       }
-
-//       const data = await response.json();
-//       console.log('Response:', data);
-
-//       if (data.success) {
-//         alert('Demo saved successfully');
-//         onComplete();
-//       } else {
-//         throw new Error(data.message || 'Failed to save demo');
-//       }
-//     } catch (error) {
-//       console.error('Error saving:', error);
-//       alert(error instanceof Error ? error.message : 'An error occurred while saving');
-//     } finally {
-//       setLoading(false);
-//     }
-//   };
-
-//   return (
-//     <div className="min-h-screen bg-gray-50 py-8 px-4 text-black">
-//       <h2 className="text-2xl font-bold mb-4">
-//         {formData._id ? 'Edit Demo' : 'Schedule Demo'}
-//       </h2>
-
-//       <form onSubmit={handleSubmit} className="space-y-6 text-black">
-//         {/* Lead Information Section */}
-//         <div className="bg-gray-50 p-4 rounded-md mb-6">
-//           {/* <h3 className="text-lg font-medium mb-4">Name : {leadData.studentName }</h3> */}
-//           <div className="grid grid-cols-2 gap-4">
-//             <div>
-//               <label className="block text-sm font-medium text-gray-700 mb-1">Student Name *</label>
-//               <input
-//                 type="text"
-//                 name="studentName"
-//                 value={leadData.studentName}
-//                 onChange={handleChange}
-//                 required
-//                     className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-
-//               />
-//             </div>
-//             <div>
-//               <label className="block text-sm font-medium text-gray-700 mb-1">Student Phone *</label>
-//               <input
-//                 type="text"
-//                 name="studentPhone"
-//                 value={leadData.studentPhone}
-//                 onChange={handleChange}
-//                 required
-//                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-
-//               />
-//             </div>
-//             <div>
-//               <label className="block text-sm font-medium text-gray-700 mb-1">Parent Phone</label>
-//               <input
-//                 type="text"
-//                 name="parentPhone"
-//                 value={leadData.parentPhone}
-//                 onChange={handleChange}
-//                 className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-
-//               />
-//             </div>
-//             <div>
-//               <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-//               <input
-//                 type="email"
-//                 name="email"
-//                 value={leadData.email}
-//                 onChange={handleChange}
-//                 className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-
-//               />
-//             </div>
-//             <div>
-//               <label className="block text-sm font-medium text-gray-700 mb-1">Board *</label>
-//               <input
-//                 type="text"
-//                 name="board"
-//                 value={leadData.board}
-//                 onChange={handleChange}
-//                 required
-//                 className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-
-//               />
-//             </div>
-//             <div>
-//               <label className="block text-sm font-medium text-gray-700 mb-1">Class *</label>
-//               <input
-//                 type="text"
-//                 name="class"
-//                 value={leadData.class}
-//                 onChange={handleChange}
-//                 required
-//                 className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-
-//               />
-//             </div>
-//           </div>
-
-//                <div>
-//               <label className="block text-sm font-medium text-gray-700 mb-1">Prefered time *</label>
-//               <input
-//                 type="time"
-//                 name="preferredTimeSlots"
-//                 value={formData.preferredTimeSlots}
-//                 onChange={handleChange}
-//                 required
-//                 className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-
-//               />
-//             </div>
-
-
-
-//                 <div>
-//               <label className="block text-sm font-medium text-gray-700 mb-1">Last Session End</label>
-//               <input
-//                 type="date"
-//                 name="sessionEndDate"
-//                 value={leadData.sessionEndDate}
-//                 onChange={handleChange}
-//                 required
-//                 className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-
-//               />
-//             </div>
-//           </div>
-        
-        
-        
-
-//         {/* Demo Information Section */}
-//         <div className="bg-gray-50 p-4 rounded-md">
-//           <h3 className="text-lg font-medium mb-4">Demo Information</h3>
-//           <div className="grid grid-cols-2 gap-4">
-//             <div>
-//               <label className="block text-sm font-medium text-gray-700 mb-1">Teacher Alloted for demo*</label>
-//               <input
-//                 type="text"
-//                 name="teacher"
-//                 value={formData.teacher}
-//                 onChange={handleChange}
-//                 required
-//                 className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-
-//               />
-//             </div>
-//             <div>
-//               <label className="block text-sm font-medium text-gray-700 mb-1">Subject for demo*</label>
-//               <select
-//                 name="subject"
-//                 value={formData.subject}
-//                 onChange={handleChange}
-//                 required
-//                 className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-
-//               >
-//                 <option value="">Select a subject</option>
-//                 {leadData.subjects && leadData.subjects.length > 0 ? (
-//                   leadData.subjects.map((subject, index) => (
-//                     <option key={index} value={subject}>
-//                       {subject}
-//                     </option>
-//                   ))
-//                 ) : (
-//                   <option value="" disabled>No subjects available</option>
-//                 )}
-//               </select>
-//             </div>
-//             <div>
-//               <label className="block text-sm font-medium text-gray-700 mb-1">Demo Date *</label>
-//               <input
-//                 type="date"
-//                 name="date"
-//                 value={formData.date}
-//                 onChange={handleChange}
-//                 required
-//                 className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-
-//               />
-//             </div>
-//             <div>
-//               <label className="block text-sm font-medium text-gray-700 mb-1">Demo Time *</label>
-//               <input
-//                 type="time"
-//                 name="time"
-//                 value={formData.time}
-//                 onChange={handleChange}
-//                 required
-//                 className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-
-//               />
-//             </div>
-//             <div>
-//               <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-//               <select
-//                 name="status"
-//                 value={formData.status}
-//                 onChange={handleChange}
-//                 className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-
-//               >
-//                 <option value="demo_scheduled">Scheduled</option>
-//                 <option value="demo_completed">Completed</option>
-//                 <option value="demo_cancelled">Cancelled</option>
-//                 <option value="demo_no_show">No Show</option>
-//                 <option value="demo_rescheduled">Rescheduled</option>
-//                 <option value="demo_rescheduled_cancelled">Rescheduled Cancelled</option>
-//                 <option value="demo_rescheduled_completed">Rescheduled Completed</option>
-//                 <option value="demo_rescheduled_no_show">Rescheduled No Show</option>
-//               </select>
-//             </div>
-//           </div>
-
-//           <div className="mt-4">
-//             <label className="block text-sm font-medium text-gray-700 mb-1">Remarks</label>
-//             <textarea
-//               name="remarks"
-//               value={formData.remarks}
-//               onChange={handleChange}
-//               className="border p-3 rounded-md w-full"
-//               rows={3}
-//             />
-//           </div>
-//         </div>
-
-//         <div className="flex justify-end space-x-4">
-//           <button
-//             type="button"
-//             onClick={onCancel}
-//             className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
-//           >
-//             Cancel
-//           </button>
-//           <button
-//             type="submit"
-//             disabled={loading}
-//             className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
-//           >
-//             {loading ? 'Saving...' : 'Save Demo'}
-//           </button>
-//         </div>
-//       </form>
-//     </div>
-//   );
-// }
-
-
-
 
 'use client';
 
@@ -500,13 +40,6 @@ interface Demo {
   preferredTimeSlots: string;
 }
 
-interface DemoResponse {
-  success: boolean;
-  message: string;
-  demos?: Demo[];
-  lead?: Lead;
-}
-
 interface DemoLeadFormProps {
   lead: Lead;
   onComplete: () => void;
@@ -515,425 +48,548 @@ interface DemoLeadFormProps {
 
 export default function DemoLeadForm({ lead, onComplete, onCancel }: DemoLeadFormProps) {
   const [loading, setLoading] = useState(false);
+  const [selectedSubject, setSelectedSubject] = useState('');
+  const [existingDemos, setExistingDemos] = useState<Demo[]>([]);
+  const [newSubject, setNewSubject] = useState('');
+  const [showAddSubject, setShowAddSubject] = useState(false);
+  const [isViewMode, setIsViewMode] = useState(false);
   
-  // Create default lead if not provided
-  const defaultLead: Lead = {
-    _id: '',
-    studentName: '',
-    studentPhone: '',
-    parentPhone: '',
-    email: '',
-    board: '',
-    class: '',
-    subjects: [],
-    status: 'new',
-    notes: '',
-    createdAt: '',
-    updatedAt: '',
-    leadSource: '',
-    classesPerWeek: 0,
-    courseInterested: '',
-    modeOfContact: '',
-    preferredTimeSlots: '',
-    counsellor: '',
-    sessionEndDate: '',
-    remarks: ''
-  };
+  const baseUrl =process.env. BASE_URL || 'http://localhost:3000';
 
-  const currentLead = lead || defaultLead;
+  const [leadData, setLeadData] = useState<Lead>({
+    ...lead,
+    subjects: lead.subjects || []
+  });
 
   const [formData, setFormData] = useState<Demo>({
-    lead: currentLead._id,
+    lead: lead._id,
     date: '',
     time: '',
     teacher: '',
-    board: currentLead.board || '',
-    class: currentLead.class || '',
+    board: lead.board || '',
+    class: lead.class || '',
     subject: '',
     status: 'demo_scheduled',
     remarks: '',
-    preferredTimeSlots: currentLead.preferredTimeSlots || '', 
-  });
-
-  // Add state for lead data with default values
-  const [leadData, setLeadData] = useState<Lead>({
-    ...currentLead,
-    subjects: currentLead.subjects || [],
-    board: currentLead.board || '',
-    class: currentLead.class || '',
-    status: currentLead.status || 'new'
+    preferredTimeSlots: lead.preferredTimeSlots || '',
   });
 
   useEffect(() => {
-    const fetchDemo = async () => {
-      if (!currentLead._id) {
-        console.error('No lead ID available');
-        return;
+    fetchExistingDemos();
+  }, []);
+
+  const fetchExistingDemos = async () => {
+    try {
+      const response = await fetch(`${baseUrl}/api/demo/view/${lead._id}`);
+      const data = await response.json();
+      
+      if (data.success && data.demos) {
+        setExistingDemos(data.demos);
       }
+    } catch (error) {
+      console.error('Error fetching demos:', error);
+    }
+  };
 
-      try {
-        // First fetch lead data to ensure we have latest subjects
-        const leadResponse = await fetch(`http://localhost:6969/api/leads/viewleads`);
-        const leadData = await leadResponse.json();
-        if (leadData.success) {
-          const updatedLead = leadData.data.find((l: Lead) => l._id === currentLead._id);
-          if (updatedLead) {
-            setLeadData({
-              ...updatedLead,
-              subjects: updatedLead.subjects || []
-            });
-          }
-        }
+  // Check if a subject has a demo and return demo status
+  const getSubjectDemoStatus = (subject: string) => {
+    const demo = existingDemos.find(d => d.subject === subject);
+    if (!demo) return 'no_demo';
+    if (demo.status === 'demo_completed' || demo.status === 'demo_rescheduled_completed') return 'completed';
+    if (demo.status === 'demo_cancelled' || demo.status === 'demo_no_show' || demo.status === 'demo_rescheduled_cancelled' || demo.status === 'demo_rescheduled_no_show') return 'can_reschedule';
+    return 'in_progress';
+  };
 
-        // Then fetch demo data
-        const response = await fetch(`http://localhost:6969/api/demo/view/${currentLead._id}`);
-        const data: DemoResponse = await response.json();
-        console.log('Demo fetch response:', data);
+  // Check if subject can have a new demo
+  const canAddDemo = (subject: string) => {
+    const demo = existingDemos.find(d => d.subject === subject);
+    if (!demo) return true; // No demo exists, can add
+    const status = demo.status;
+    // Can add new demo if previous one is completed, cancelled, or no-show
+    return status === 'demo_completed' || 
+           status === 'demo_cancelled' || 
+           status === 'demo_no_show' || 
+           status === 'demo_rescheduled_completed' ||
+           status === 'demo_rescheduled_cancelled' ||
+           status === 'demo_rescheduled_no_show';
+  };
 
-        if (data.success) {
-          // Update demo data if available
-          if (data.demos && data.demos.length > 0) {
-            const existingDemo = data.demos[0]; // Get the most recent demo
-            setFormData({
-              _id: existingDemo._id,
-              lead: currentLead._id,
-              date: existingDemo.date ? new Date(existingDemo.date).toISOString().split('T')[0] : '',
-              time: existingDemo.time || '',
-              teacher: existingDemo.teacher || '',
-              board: existingDemo.board || currentLead.board || '',
-              class: existingDemo.class || currentLead.class || '',
-              subject: existingDemo.subject || '',
-              status: existingDemo.status || 'demo_scheduled',
-              remarks: existingDemo.remarks || '',
-              preferredTimeSlots: currentLead.preferredTimeSlots || '',
-            });
-          }
-        }
-      } catch (error) {
-        console.error('Error fetching data:', error);
+  // Check if we can edit existing demo
+  const canEditDemo = (subject: string) => {
+    const demo = existingDemos.find(d => d.subject === subject);
+    if (!demo) return false;
+    // Can edit all demos EXCEPT completed ones
+    return !(demo.status === 'demo_completed' || demo.status === 'demo_rescheduled_completed');
+  };
+
+  const handleSubjectSelect = (subject: string) => {
+    const existingDemo = existingDemos.find(demo => demo.subject === subject);
+    const demoStatus = getSubjectDemoStatus(subject);
+    
+    // If there's a completed demo, show it in view mode only
+    if (existingDemo && demoStatus === 'completed') {
+      // Load existing demo for viewing only
+      setFormData({
+        _id: existingDemo._id,
+        lead: lead._id,
+        date: existingDemo.date ? new Date(existingDemo.date).toISOString().split('T')[0] : '',
+        time: existingDemo.time || '',
+        teacher: existingDemo.teacher || '',
+        board: existingDemo.board || lead.board || '',
+        class: existingDemo.class || lead.class || '',
+        subject: existingDemo.subject || '',
+        status: existingDemo.status || 'demo_scheduled',
+        remarks: existingDemo.remarks || '',
+        preferredTimeSlots: lead.preferredTimeSlots || '',
+      });
+      setIsViewMode(true);
+    } else if (existingDemo) {
+      // For all other existing demos (cancelled, no-show, scheduled, rescheduled), allow editing
+      setFormData({
+        _id: existingDemo._id,
+        lead: lead._id,
+        date: existingDemo.date ? new Date(existingDemo.date).toISOString().split('T')[0] : '',
+        time: existingDemo.time || '',
+        teacher: existingDemo.teacher || '',
+        board: existingDemo.board || lead.board || '',
+        class: existingDemo.class || lead.class || '',
+        subject: existingDemo.subject || '',
+        status: existingDemo.status || 'demo_scheduled',
+        remarks: existingDemo.remarks || '',
+        preferredTimeSlots: lead.preferredTimeSlots || '',
+      });
+      setIsViewMode(false); // Allow editing for all non-completed demos
+    } else {
+      // Create new demo
+      setFormData({
+        lead: lead._id,
+        date: '',
+        time: '',
+        teacher: '',
+        board: lead.board || '',
+        class: lead.class || '',
+        subject: subject,
+        status: 'demo_scheduled',
+        remarks: '',
+        preferredTimeSlots: lead.preferredTimeSlots || '',
+      });
+      setIsViewMode(false);
+    }
+    
+    setSelectedSubject(subject);
+  };
+
+  const handleAddSubject = async () => {
+    if (!newSubject.trim()) return;
+    
+    const updatedSubjects = [...leadData.subjects, newSubject.trim()];
+    
+    try {
+      const leadUpdateData = {
+        ...leadData,
+        subjects: updatedSubjects
+      };
+
+      const response = await fetch(`${baseUrl}/api/leads/editlead/${lead._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(leadUpdateData),
+      });
+
+      if (response.ok) {
+        setLeadData(prev => ({ ...prev, subjects: updatedSubjects }));
+        setNewSubject('');
+        setShowAddSubject(false);
+        alert('Subject added successfully!');
       }
-    };
-
-    fetchDemo();
-  }, [currentLead._id]);
+    } catch (error) {
+      console.error('Error adding subject:', error);
+      alert('Failed to add subject');
+    }
+  };
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
     const { name, value } = e.target;
-    
-    // Handle lead data changes
-    if (name in leadData) {
-      setLeadData(prev => ({ ...prev, [name]: value }));
-    }
-    
-    // Handle demo data changes
-    if (name in formData) {
-      setFormData(prev => ({ ...prev, [name]: value }));
-
-      // If status is changed, update lead status as well
-      if (name === 'status') {
-        setLeadData(prev => ({ ...prev, status: value }));
-      }
-    }
+    setFormData(prev => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = async () => {
+    if (!selectedSubject) {
+      alert('Please select a subject first');
+      return;
+    }
+
+    if (!formData.date || !formData.time || !formData.teacher) {
+      alert('Please fill in all required fields (Date, Time, and Teacher)');
+      return;
+    }
+
     setLoading(true);
 
     try {
-      // Validate required fields
-      if (!formData.subject || !formData.date || !formData.time) {
-        alert('Please fill in all required fields (Subject, Date, and Time)');
-        return;
-      }
-
-      // First update lead data with the new status
-      const leadResponse = await fetch(`http://localhost:6969/api/leads/editlead/${currentLead._id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ...leadData,
-          status: formData.status // Ensure lead status matches demo status
-        }),
-      });
-
-      if (!leadResponse.ok) {
-        throw new Error(`Failed to update lead: ${leadResponse.statusText}`);
-      }
-
-      const leadResult = await leadResponse.json();
-      if (!leadResult.success) {
-        throw new Error(leadResult.message || 'Failed to update lead');
-      }
-
-      // Then update/create demo
       const url = formData._id 
-        ? `http://localhost:6969/api/demo/edit/${formData._id}`
-        : 'http://localhost:6969/api/demo/add';
+        ? `${baseUrl}/api/demo/edit/${formData._id}`
+        : `${baseUrl}/api/demo/add`;
       
       const method = formData._id ? 'PUT' : 'POST';
-      
-      console.log('Submitting demo data:', formData);
+
+      const demoDataToSend = {
+        lead: formData.lead,
+        date: formData.date,
+        time: formData.time,
+        teacher: formData.teacher,
+        board: formData.board,
+        class: formData.class,
+        subject: formData.subject,
+        status: formData.status,
+        remarks: formData.remarks,
+        preferredTimeSlots: formData.preferredTimeSlots,
+      };
 
       const response = await fetch(url, {
         method,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(demoDataToSend),
       });
 
-      if (!response.ok) {
-        throw new Error(`Failed to save demo: ${response.statusText}`);
-      }
-
       const data = await response.json();
-      console.log('Response:', data);
 
       if (data.success) {
-        alert('Demo saved successfully');
+        alert('Demo saved successfully!');
+        await fetchExistingDemos();
+        
+        // Reset selection to refresh the view
+        setSelectedSubject('');
+        setTimeout(() => setSelectedSubject(formData.subject), 100);
+        
+        if (formData.status === 'demo_completed' || formData.status === 'demo_rescheduled_completed') {
+          alert('Demo completed! You can now schedule demos for other subjects.');
+        }
+        
         onComplete();
       } else {
         throw new Error(data.message || 'Failed to save demo');
       }
     } catch (error) {
       console.error('Error saving:', error);
-      alert(error instanceof Error ? error.message : 'An error occurred while saving');
+      alert('Failed to save demo');
     } finally {
       setLoading(false);
     }
   };
 
+  const getStatusBadgeColor = (status: string) => {
+    switch (status) {
+      case 'completed':
+        return 'bg-green-100 text-green-800';
+      case 'in_progress':
+        return 'bg-blue-100 text-blue-800';
+      case 'can_reschedule':
+        return 'bg-orange-100 text-orange-800';
+      default:
+        return 'bg-gray-100 text-gray-600';
+    }
+  };
+
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'completed':
+        return 'Completed';
+      case 'in_progress':
+        return 'In Progress';
+      case 'can_reschedule':
+        return 'Can Reschedule';
+      default:
+        return 'No Demo';
+    }
+  };
+
+  // Form is read-only only for completed demos
+  const isFormReadOnly = isViewMode;
+
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
-      <div className="max-w-7xl mx-auto">
-        <h1 className="text-2xl font-semibold text-gray-900 mb-8">
-          {formData._id ? 'Edit Demo' : 'Schedule Demo'}
-        </h1>
-        
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Left Column - Lead Information */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h2 className="text-lg font-medium text-gray-900 mb-6">Student Information</h2>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Student Name</label>
-                <input
-                  type="text"
-                  name="studentName"
-                  value={leadData.studentName}
-                  onChange={handleChange}
-                  required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Enter student name"
-                />
+    <div className="min-h-screen bg-gray-50 p-4">
+      <div className="max-w-5xl mx-auto">
+        {/* Header */}
+        <div className="text-center mb-6">
+          <h1 className="text-2xl font-bold text-gray-900 mb-1">Demo Management</h1>
+          <p className="text-sm text-gray-600">Manage demo sessions for each subject</p>
+        </div>
+
+        {/* Student Details Card */}
+        <div className="bg-white rounded-lg shadow-sm border p-6 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-900">Student Information</h2>
+            <span className="px-3 py-1 bg-gray-100 text-gray-700 rounded text-sm">
+              ID: {leadData._id.slice(-6)}
+            </span>
+          </div>
+          
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <div>
+              <p className="text-gray-600 mb-1">Student Name</p>
+              <p className="font-medium text-gray-900">{leadData.studentName}</p>
+            </div>
+            <div>
+              <p className="text-gray-600 mb-1">Phone</p>
+              <p className="font-medium text-gray-900">{leadData.studentPhone}</p>
+            </div>
+            <div>
+              <p className="text-gray-600 mb-1">Parent Phone</p>
+              <p className="font-medium text-gray-900">{leadData.parentPhone}</p>
+            </div>
+            <div>
+              <p className="text-gray-600 mb-1">Email</p>
+              <p className="font-medium text-gray-900 truncate">{leadData.email}</p>
+            </div>
+            <div>
+              <p className="text-gray-600 mb-1">Board</p>
+              <p className="font-medium text-gray-900">{leadData.board}</p>
+            </div>
+            <div>
+              <p className="text-gray-600 mb-1">Class</p>
+              <p className="font-medium text-gray-900">{leadData.class}</p>
+            </div>
+            <div>
+              <p className="text-gray-600 mb-1">Lead Status</p>
+              <p className="font-medium text-gray-900">{leadData.status}</p>
+            </div>
+            <div>
+              <p className="text-gray-600 mb-1">Subjects</p>
+              <p className="font-medium text-gray-900">{leadData.subjects.length}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Main Content */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left Panel - Subject Selection */}
+          <div className="lg:col-span-1">
+            <div className="bg-white rounded-lg shadow-sm border p-4">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">Subjects</h3>
+                <button
+                  onClick={() => setShowAddSubject(!showAddSubject)}
+                  className="px-3 py-1 bg-gray-900 text-white rounded text-sm hover:bg-gray-800 transition-colors"
+                >
+                  + Add
+                </button>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Student Phone</label>
-                <input
-                  type="text"
-                  name="studentPhone"
-                  value={leadData.studentPhone}
-                  onChange={handleChange}
-                  required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Enter phone number"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Parent Phone</label>
-                <input
-                  type="text"
-                  name="parentPhone"
-                  value={leadData.parentPhone}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Enter parent phone"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
-                <input
-                  type="email"
-                  name="email"
-                  value={leadData.email}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Enter email address"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Board</label>
-                  <input
-                    type="text"
-                    name="board"
-                    value={leadData.board}
-                    onChange={handleChange}
-                    required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Enter board"
-                  />
+              {/* Add Subject Form */}
+              {showAddSubject && (
+                <div className="mb-4 p-3 bg-gray-50 rounded border">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newSubject}
+                      onChange={(e) => setNewSubject(e.target.value)}
+                      placeholder="Subject name"
+                      className="flex-1 px-3 py-2 border rounded text-sm focus:outline-none focus:ring-1 focus:ring-gray-400"
+                    />
+                    <button
+                      onClick={handleAddSubject}
+                      className="px-3 py-2 bg-gray-900 text-white rounded text-sm hover:bg-gray-800 transition-colors"
+                    >
+                      Add
+                    </button>
+                    <button
+                      onClick={() => setShowAddSubject(false)}
+                      className="px-3 py-2 bg-gray-500 text-white rounded text-sm hover:bg-gray-600 transition-colors"
+                    >
+                      ×
+                    </button>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Class</label>
-                  <input
-                    type="text"
-                    name="class"
-                    value={leadData.class}
-                    onChange={handleChange}
-                    required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Enter class"
-                  />
+              )}
+
+              {/* Subject List */}
+              <div className="space-y-2 max-h-80 overflow-y-auto">
+                {leadData.subjects.map((subject, index) => {
+                  const demoStatus = getSubjectDemoStatus(subject);
+                  const isSelected = selectedSubject === subject;
+                  
+                  return (
+                    <div
+                      key={index}
+                      onClick={() => handleSubjectSelect(subject)}
+                      className={`p-3 rounded border transition-colors cursor-pointer ${
+                        isSelected 
+                          ? 'border-gray-900 bg-gray-50' 
+                          : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      <div className="flex justify-between items-center">
+                        <span className={`font-medium text-sm ${isSelected ? 'text-gray-900' : 'text-gray-700'}`}>
+                          {subject}
+                        </span>
+                        <span className={`px-2 py-1 text-xs rounded ${getStatusBadgeColor(demoStatus)}`}>
+                          {getStatusText(demoStatus)}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {leadData.subjects.length === 0 && (
+                <div className="text-center py-6 text-gray-500">
+                  <p className="text-sm">No subjects added yet</p>
                 </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Preferred Time</label>
-                <input
-                  type="time"
-                  name="preferredTimeSlots"
-                  value={formData.preferredTimeSlots}
-                  onChange={handleChange}
-                  required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Last Session End</label>
-                <input
-                  type="date"
-                  name="sessionEndDate"
-                  value={leadData.sessionEndDate}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
+              )}
             </div>
           </div>
 
-          {/* Right Column - Demo Information */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h2 className="text-lg font-medium text-gray-900 mb-6">Demo Information</h2>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Teacher Allotted for Demo</label>
-                <input
-                  type="text"
-                  name="teacher"
-                  value={formData.teacher}
-                  onChange={handleChange}
-                  required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Enter teacher name"
-                />
+          {/* Right Panel - Demo Form */}
+          <div className="lg:col-span-2">
+            <div className="bg-white rounded-lg shadow-sm border p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-semibold text-gray-900">
+                  {selectedSubject ? `Demo Details - ${selectedSubject}` : 'Select a Subject'}
+                </h3>
+                {selectedSubject && (
+                  <div className="flex gap-2">
+                    {isViewMode && (
+                      <span className="px-3 py-1 bg-gray-100 text-gray-800 rounded text-sm">
+                        View Only (Completed)
+                      </span>
+                    )}
+                    {formData._id && !isViewMode && (
+                      <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded text-sm">
+                        Editing Existing Demo
+                      </span>
+                    )}
+                    {!formData._id && selectedSubject && !isViewMode && (
+                      <span className="px-3 py-1 bg-green-100 text-green-800 rounded text-sm">
+                        New Demo
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
+              
+              {selectedSubject ? (
+                <div className="space-y-4">
+                  {/* Teacher Field */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Teacher <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      name="teacher"
+                      value={formData.teacher}
+                      onChange={handleChange}
+                      disabled={isFormReadOnly}
+                      required
+                      className="w-full px-3 py-2 border rounded text-sm focus:outline-none focus:ring-1 focus:ring-gray-400 disabled:bg-gray-100"
+                      placeholder="Enter teacher name"
+                    />
+                  </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Subject for Demo</label>
-                <select
-                  name="subject"
-                  value={formData.subject}
-                  onChange={handleChange}
-                  required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">Select Subject</option>
-                  {leadData.subjects && leadData.subjects.length > 0 ? (
-                    leadData.subjects.map((subject, index) => (
-                      <option key={index} value={subject}>
-                        {subject}
-                      </option>
-                    ))
-                  ) : (
-                    <option value="" disabled>No subjects available</option>
-                  )}
-                </select>
-              </div>
+                  {/* Date & Time Row */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Date <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="date"
+                        name="date"
+                        value={formData.date}
+                        onChange={handleChange}
+                        disabled={isFormReadOnly}
+                        required
+                        className="w-full px-3 py-2 border rounded text-sm focus:outline-none focus:ring-1 focus:ring-gray-400 disabled:bg-gray-100"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Time <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="time"
+                        name="time"
+                        value={formData.time}
+                        onChange={handleChange}
+                        disabled={isFormReadOnly}
+                        required
+                        className="w-full px-3 py-2 border rounded text-sm focus:outline-none focus:ring-1 focus:ring-gray-400 disabled:bg-gray-100"
+                      />
+                    </div>
+                  </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Demo Date</label>
-                <input
-                  type="date"
-                  name="date"
-                  value={formData.date}
-                  onChange={handleChange}
-                  required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
+                  {/* Status Field */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Demo Status
+                    </label>
+                    <select
+                      name="status"
+                      value={formData.status}
+                      onChange={handleChange}
+                      disabled={isFormReadOnly}
+                      className="w-full px-3 py-2 border rounded text-sm focus:outline-none focus:ring-1 focus:ring-gray-400 disabled:bg-gray-100"
+                    >
+                      <option value="demo_scheduled">Scheduled</option>
+                      <option value="demo_completed">Completed</option>
+                      <option value="demo_cancelled">Cancelled</option>
+                      <option value="demo_no_show">No Show</option>
+                      <option value="demo_rescheduled">Rescheduled</option>
+                      <option value="demo_rescheduled_cancelled">Rescheduled Cancelled</option>
+                      <option value="demo_rescheduled_completed">Rescheduled Completed</option>
+                      <option value="demo_rescheduled_no_show">Rescheduled No Show</option>
+                    </select>
+                  </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Demo Time</label>
-                <input
-                  type="time"
-                  name="time"
-                  value={formData.time}
-                  onChange={handleChange}
-                  required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
+                  {/* Remarks Field */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Remarks</label>
+                    <textarea
+                      name="remarks"
+                      value={formData.remarks}
+                      onChange={handleChange}
+                      disabled={isFormReadOnly}
+                      rows={3}
+                      className="w-full px-3 py-2 border rounded text-sm focus:outline-none focus:ring-1 focus:ring-gray-400 resize-none disabled:bg-gray-100"
+                      placeholder="Enter remarks about the demo..."
+                    />
+                  </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
-                <select
-                  name="status"
-                  value={formData.status}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="demo_scheduled">Scheduled</option>
-                  <option value="demo_completed">Completed</option>
-                  <option value="demo_cancelled">Cancelled</option>
-                  <option value="demo_no_show">No Show</option>
-                  <option value="demo_rescheduled">Rescheduled</option>
-                  <option value="demo_rescheduled_cancelled">Rescheduled Cancelled</option>
-                  <option value="demo_rescheduled_completed">Rescheduled Completed</option>
-                  <option value="demo_rescheduled_no_show">Rescheduled No Show</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Remarks</label>
-                <textarea
-                  name="remarks"
-                  value={formData.remarks}
-                  onChange={handleChange}
-                  rows={4}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                  placeholder="Type here..."
-                />
-              </div>
-
-              <div className="flex space-x-3 pt-4">
-                <button
-                  type="button"
-                  onClick={onCancel}
-                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSubmit}
-                  disabled={loading}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  {loading ? 'Saving...' : 'Save Demo'}
-                </button>
-              </div>
+                  {/* Action Buttons */}
+                  <div className="flex space-x-3 pt-4">
+                    <button
+                      type="button"
+                      onClick={onCancel}
+                      className="flex-1 px-4 py-2 border text-gray-700 rounded hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-gray-400 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    
+                    {/* Only show save/update button if not in view mode */}
+                    {!isViewMode && (
+                      <button
+                        type="button"
+                        onClick={handleSubmit}
+                        disabled={loading}
+                        className="flex-1 px-4 py-2 bg-gray-900 text-white rounded hover:bg-gray-800 focus:outline-none focus:ring-1 focus:ring-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        {loading ? 'Saving...' : (formData._id ? 'Update Demo' : 'Save Demo')}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
+                    <span className="text-2xl">📚</span>
+                  </div>
+                  <h4 className="text-lg font-medium text-gray-800 mb-2">Select a Subject</h4>
+                  <p className="text-gray-600 text-sm">Choose a subject to manage its demo session</p>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -941,4 +597,3 @@ export default function DemoLeadForm({ lead, onComplete, onCancel }: DemoLeadFor
     </div>
   );
 }
-

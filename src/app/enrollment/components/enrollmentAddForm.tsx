@@ -28,18 +28,6 @@ interface Lead {
   demo?: Demo | null; // Add this for demo data
 }
 
-// First, define the PaymentDetails interface
-// interface PaymentDetails {
-//   classAmount: number;
-//   amountPaid: number;
-//   lastPayments: Array<{
-//     paymentId: string;
-//     date: Date;
-//     amount: number;
-//   }>;
-// }
-
-
 interface Subject {
   student: string; // This will be the ObjectId reference
   board: string;
@@ -123,6 +111,8 @@ export default function EnrollmentForm({ lead, onComplete, onCancel }: Enrollmen
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [existingStudentId, setExistingStudentId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const baseUrl =process.env. BASE_URL;
+
   const [formData, setFormData] = useState<Enrollment>({
     lead: lead._id,
     studentName: '',
@@ -281,7 +271,7 @@ export default function EnrollmentForm({ lead, onComplete, onCancel }: Enrollmen
         } else {
           // If no demo data in lead, try to fetch it
           try {
-            const demoResponse = await fetch(`http://localhost:6969/api/demo/view/${lead._id}`);
+            const demoResponse = await fetch(`${baseUrl}/api/demo/view/${lead._id}`);
             const demoData: DemoResponse = await demoResponse.json();
             console.log('Fetched demo data:', demoData);
 
@@ -297,7 +287,7 @@ export default function EnrollmentForm({ lead, onComplete, onCancel }: Enrollmen
         if (lead.existingStudentId) {
           try {
             console.log('Fetching existing student with ID:', lead.existingStudentId);
-            const response = await fetch(`http://localhost:6969/api/students/${lead.existingStudentId}`);
+            const response = await fetch(`${baseUrl}/api/students/${lead.existingStudentId}`);
             const data = await response.json();
             console.log('Existing student data:', data);
 
@@ -326,7 +316,7 @@ export default function EnrollmentForm({ lead, onComplete, onCancel }: Enrollmen
 
               // Fetch subjects for this student
               try {
-                const subjectsResponse = await fetch(`http://localhost:6969/api/subject/${existingEnrollment._id}`);
+                const subjectsResponse = await fetch(`${baseUrl}/api/subject/${existingEnrollment._id}`);
                 const subjectsData = await subjectsResponse.json();
                 console.log('Fetched subjects data:', subjectsData);
                 
@@ -454,7 +444,7 @@ export default function EnrollmentForm({ lead, onComplete, onCancel }: Enrollmen
 
     // Check for duplicates (email, phone, username)
     try {
-      const response = await fetch('http://localhost:6969/api/students');
+      const response = await fetch(`${baseUrl}/api/students`);
       if (response.ok) {
         const data: StudentsResponse = await response.json();
         if (data.success && data.data) {
@@ -503,8 +493,8 @@ export default function EnrollmentForm({ lead, onComplete, onCancel }: Enrollmen
 
       // Determine URL and method based on whether we're updating or creating
       const url = isEditing && existingStudentId
-        ? `http://localhost:6969/api/students/${existingStudentId}`
-        : 'http://localhost:6969/api/students';
+        ? `${baseUrl}/api/students/${existingStudentId}`
+        : `${baseUrl}/api/students`;
 
       const method = isEditing ? 'PUT' : 'POST';
 
@@ -573,7 +563,7 @@ export default function EnrollmentForm({ lead, onComplete, onCancel }: Enrollmen
 
           console.log('Sending subject data:', subjectData);
 
-          const subjectResponse = await fetch('http://localhost:6969/api/subject/add', {
+          const subjectResponse = await fetch(`${baseUrl}/api/subject/add`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(subjectData),
@@ -595,7 +585,7 @@ export default function EnrollmentForm({ lead, onComplete, onCancel }: Enrollmen
 
       // Update lead status to converted
       try {
-        const leadUpdateResponse = await fetch(`http://localhost:6969/api/leads/editlead/${lead._id}`, {
+        const leadUpdateResponse = await fetch(`${baseUrl}/api/leads/editlead/${lead._id}`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
