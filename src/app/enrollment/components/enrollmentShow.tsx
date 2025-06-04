@@ -35,7 +35,7 @@ export default function EnrollmentList() {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'all' | 'active' | 'inactive' | 'graduated' | 'dropped'>('all');
-  const [deleteLoading, setDeleteLoading] = useState<string | null>(null);
+  // const [deleteLoading, setDeleteLoading] = useState<string | null>(null);
   const [editingEnrollment, setEditingEnrollment] = useState<Enrollment | null>(null);
   const [showEditForm, setShowEditForm] = useState(false);
   const baseUrl =process.env. BASE_URL;
@@ -87,31 +87,31 @@ export default function EnrollmentList() {
     }
   };
 
-  const handleDeleteEnrollment = async (enrollmentId: string) => {
-    if (!confirm('Are you sure you want to delete this enrollment? This action cannot be undone.')) {
-      return;
-    }
+  // const handleDeleteEnrollment = async (enrollmentId: string) => {
+  //   if (!confirm('Are you sure you want to delete this enrollment? This action cannot be undone.')) {
+  //     return;
+  //   }
 
-    try {
-      setDeleteLoading(enrollmentId);
-      const response = await fetch(`${baseUrl}/api/students/${enrollmentId}`, {
-        method: 'DELETE',
-      });
+  //   try {
+  //     setDeleteLoading(enrollmentId);
+  //     const response = await fetch(`${baseUrl}/api/students/${enrollmentId}`, {
+  //       method: 'DELETE',
+  //     });
 
-      const data = await response.json();
-      if (data.success) {
-        setEnrollments(prevEnrollments => prevEnrollments.filter(enrollment => enrollment._id !== enrollmentId));
-        alert('Enrollment deleted successfully');
-      } else {
-        alert(data.message || 'Failed to delete enrollment');
-      }
-    } catch (error) {
-      console.error('Error deleting enrollment:', error);
-      alert('An error occurred while deleting the enrollment');
-    } finally {
-      setDeleteLoading(null);
-    }
-  };
+  //     const data = await response.json();
+  //     if (data.success) {
+  //       setEnrollments(prevEnrollments => prevEnrollments.filter(enrollment => enrollment._id !== enrollmentId));
+  //       alert('Enrollment deleted successfully');
+  //     } else {
+  //       alert(data.message || 'Failed to delete enrollment');
+  //     }
+  //   } catch (error) {
+  //     console.error('Error deleting enrollment:', error);
+  //     alert('An error occurred while deleting the enrollment');
+  //   } finally {
+  //     setDeleteLoading(null);
+  //   }
+  // };
 
   const handleEditClick = (enrollment: Enrollment) => {
     setEditingEnrollment(enrollment);

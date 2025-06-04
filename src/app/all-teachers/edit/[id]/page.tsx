@@ -25,12 +25,28 @@ interface TeacherFormData {
   password: string;
   searchCards: string[];
   isAvailable: boolean;
+  timeSlots: { value: string; isAvailable: boolean }[];
 }
 
 const EditTeacherPage = () => {
   const router = useRouter();
   const params = useParams();
   const id = params?.id; // Get teacher ID from URL
+
+  // Generate time slots from 12 AM to 11 PM
+  const generateTimeSlots = () => {
+    const slots = [];
+    for (let hour = 0; hour < 24; hour++) {
+      const period = hour >= 12 ? 'PM' : 'AM';
+      const nextHour = (hour + 1) % 24;
+      const nextPeriod = nextHour >= 12 ? 'PM' : 'AM';
+      const displayHour = hour % 12 || 12;
+      const nextDisplayHour = nextHour % 12 || 12;
+      const timeString = `${displayHour}:00 ${period} to ${nextDisplayHour}:00 ${nextPeriod}`;
+      slots.push({ value: timeString, isAvailable: false });
+    }
+    return slots;
+  };
 
   const [teacherData, setTeacherData] = useState<TeacherFormData>({
     fullName: "",
@@ -39,6 +55,7 @@ const EditTeacherPage = () => {
     password: "",
     searchCards: [],
     isAvailable: true,
+    timeSlots: generateTimeSlots()
   });
 
   const [initialTeacherData, setInitialTeacherData] = useState<any>({});
@@ -49,6 +66,16 @@ const EditTeacherPage = () => {
   const [error, setError] = useState("");
   const [isPasswordVisible, setIsPasswordVisible] = useState(false); // State for password visibility
 
+  // Handle time slot availability toggle
+  const handleTimeSlotToggle = (index: number) => {
+    setTeacherData(prev => ({
+      ...prev,
+      timeSlots: prev.timeSlots.map((slot, i) => 
+        i === index ? { ...slot, isAvailable: !slot.isAvailable } : slot
+      )
+    }));
+  };
+
   // Fetch teacher details
   const fetchTeacherDetails = async () => {
     setLoading(true);
@@ -57,25 +84,34 @@ const EditTeacherPage = () => {
     try {
       const response = await api.get(`/admin/get-teacher/${id}`);
       const teacher = response.data;
+      
+      // Convert teacher's time slots to the required format
+      const timeSlots = generateTimeSlots().map(slot => ({
+        ...slot,
+        isAvailable: teacher.timeSlots?.some((t: any) => t.value === slot.value && t.isAvailable) || false
+      }));
+
       setTeacherData({
         fullName: teacher.name,
         email: teacher.email,
         phoneNumber: teacher.phoneNumber,
         password: teacher.password,
-        searchCards: teacher.searchCardRef.map((card) => card._id),
+        searchCards: teacher.searchCardRef.map((card: any) => card._id),
         isAvailable: teacher.isAvailable,
+        timeSlots: timeSlots
       });
+      
       setInitialTeacherData({
         name: teacher.name,
         email: teacher.email,
         phoneNumber: teacher.phoneNumber,
         password: teacher.password,
-        searchCardRef: teacher.searchCardRef.map((card) => card._id),
+        searchCardRef: teacher.searchCardRef.map((card: any) => card._id),
         isAvailable: teacher.isAvailable,
+        timeSlots: timeSlots
       });
-      setSelectedCards(teacher.searchCardRef.map((card) => card._id));// preselect associated 
-      // cards
-      console.log("Teacher search cards:", teacher.searchCardRef);
+      
+      setSelectedCards(teacher.searchCardRef.map((card: any) => card._id));
     } catch (err) {
       const errorMessage = err.response?.data?.message || "Failed to fetch teacher details";
       setError(errorMessage);
@@ -131,43 +167,47 @@ const EditTeacherPage = () => {
   };
 
   // Save changes
-const handleSaveChanges = async () => {
-  setLoading(true);
-  setError("");
+  const handleSaveChanges = async () => {
+    setLoading(true);
+    setError("");
 
-  try {
-     // Ensure selectedCards contains only valid ObjectId strings
-    const validSelectedCards = selectedCards.map((card) => {
-      if (typeof card === "object" && card._id) {
-        return card._id; // Extract _id if card is an object
+    try {
+      const validSelectedCards = selectedCards.map((card) => {
+        if (typeof card === "object" && card._id) {
+          return card._id;
+        }
+        return card;
+      });
+
+      // Filter only selected time slots
+      const selectedTimeSlots = teacherData.timeSlots.filter(slot => slot.isAvailable);
+
+      if (selectedTimeSlots.length === 0) {
+        alert('Please select at least one time slot');
+        return;
       }
-      return card; // Otherwise, use the card directly
-    });
 
-    // Prepare payload
-    const payload = {
-      fullName: teacherData.fullName,
-      email: teacherData.email,
-      phoneNumber: teacherData.phoneNumber,
-      password: teacherData.password,
-      searchCards: validSelectedCards, // Ensure this is an array of IDs
-      isAvailable: teacherData.isAvailable,
-    };
+      const payload = {
+        fullName: teacherData.fullName,
+        email: teacherData.email,
+        phoneNumber: teacherData.phoneNumber,
+        password: teacherData.password,
+        searchCards: validSelectedCards,
+        isAvailable: teacherData.isAvailable,
+        timeSlots: selectedTimeSlots
+      };
 
-    console.log("Payload being sent:", payload);
-
-    // Make PUT request to backend
-    await api.put(`/admin/update-teacher/${id}`, payload);
-    alert("Teacher profile updated successfully!");
-    router.push("/all-teachers"); // Redirect to teacher list page
-  } catch (err) {
-    const errorMessage = err.response?.data?.message || "Failed to update teacher profile";
-    setError(errorMessage);
-    console.error("Error updating teacher profile:", err);
-  } finally {
-    setLoading(false);
-  }
-};
+      await api.put(`/admin/update-teacher/${id}`, payload);
+      alert("Teacher profile updated successfully!");
+      router.push("/all-teachers");
+    } catch (err) {
+      const errorMessage = err.response?.data?.message || "Failed to update teacher profile";
+      setError(errorMessage);
+      console.error("Error updating teacher profile:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
@@ -267,6 +307,30 @@ const handleSaveChanges = async () => {
                 <option value="false">Unavailable</option>
               </select>
             </div>
+          </div>
+
+          {/* Time Slots Selection */}
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Select Available Time Slots</label>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
+              {teacherData.timeSlots.map((slot, index) => (
+                <button
+                  key={index}
+                  type="button"
+                  onClick={() => handleTimeSlotToggle(index)}
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    slot.isAvailable
+                      ? 'bg-blue-100 text-blue-800 hover:bg-blue-200'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  {slot.value}
+                </button>
+              ))}
+            </div>
+            <p className="text-sm text-gray-500 mt-2">
+              Selected slots: {teacherData.timeSlots.filter(slot => slot.isAvailable).length}
+            </p>
           </div>
 
           <button
