@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import EditEnrollmentForm from './EnrollmentEdit';
-import DemoLeadForm from '../../demo/components/DemoForm';
+import EditEnrollmentForm from './enrollmentEdit';
+import DemoLeadForm from '../../demo/components/demoForm';
 
 
 interface Enrollment {
