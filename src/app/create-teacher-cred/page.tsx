@@ -19,7 +19,8 @@ interface TeacherFormData {
   email: string;
   phoneNumber: string;
   password: string;
-  searchCards: string[]; 
+  searchCards: string[];
+  timeSlots: { value: string; isAvailable: boolean }[];
 }
 
 const AdminTeacherDashboard = () => {
@@ -31,12 +32,28 @@ const AdminTeacherDashboard = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showForm, setShowForm] = useState(false);
   
+  // Generate time slots from 12 AM to 11 PM
+  const generateTimeSlots = () => {
+    const slots = [];
+    for (let hour = 0; hour < 24; hour++) {
+      const period = hour >= 12 ? 'PM' : 'AM';
+      const nextHour = (hour + 1) % 24;
+      const nextPeriod = nextHour >= 12 ? 'PM' : 'AM';
+      const displayHour = hour % 12 || 12;
+      const nextDisplayHour = nextHour % 12 || 12;
+      const timeString = `${displayHour}:00 ${period} to ${nextDisplayHour}:00 ${nextPeriod}`;
+      slots.push({ value: timeString, isAvailable: false });
+    }
+    return slots;
+  };
+
   const [formData, setFormData] = useState<TeacherFormData>({
     fullName: '',
     email: '',
     phoneNumber: '',
     password: '',
-    searchCards: []
+    searchCards: [],
+    timeSlots: generateTimeSlots()
   });
 
   // Fetch search cards from API
@@ -60,10 +77,28 @@ const AdminTeacherDashboard = () => {
     fetchSearchCards();
   }, []);
 
+  // Handle time slot availability toggle
+  const handleTimeSlotToggle = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      timeSlots: prev.timeSlots.map((slot, i) => 
+        i === index ? { ...slot, isAvailable: !slot.isAvailable } : slot
+      )
+    }));
+  };
+
   // Create teacher with API
   const handleCreateTeacher = async () => {
     if (selectedCards.length === 0) {
       alert('Please select at least one search card');
+      return;
+    }
+
+    // Filter only selected time slots
+    const selectedTimeSlots = formData.timeSlots.filter(slot => slot.isAvailable);
+
+    if (selectedTimeSlots.length === 0) {
+      alert('Please select at least one time slot');
       return;
     }
 
@@ -77,9 +112,10 @@ const AdminTeacherDashboard = () => {
         phoneNumber: formData.phoneNumber,
         password: formData.password,
         searchCards: selectedCards,
+        timeSlots: selectedTimeSlots
       };
 
-      const response = await api.post('/admin/create-teacher-credentials', payload);
+      await api.post('/admin/create-teacher-credentials', payload);
       
       // Reset form and close
       setFormData({
@@ -88,6 +124,7 @@ const AdminTeacherDashboard = () => {
         phoneNumber: '',
         password: '',
         searchCards: [],
+        timeSlots: generateTimeSlots()
       });
       setSelectedCards([]);
       setShowForm(false);
@@ -257,6 +294,30 @@ const AdminTeacherDashboard = () => {
                   required
                 />
               </div>
+            </div>
+
+            {/* Time Slots Selection */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Select Available Time Slots</label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                {formData.timeSlots.map((slot, index) => (
+                  <button
+                    key={index}
+                    type="button"
+                    onClick={() => handleTimeSlotToggle(index)}
+                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      slot.isAvailable
+                        ? 'bg-blue-100 text-blue-800 hover:bg-blue-200'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    {slot.value}
+                  </button>
+                ))}
+              </div>
+              <p className="text-sm text-gray-500 mt-2">
+                Selected slots: {formData.timeSlots.filter(slot => slot.isAvailable).length}
+              </p>
             </div>
             
             {/* Selected Cards Display */}

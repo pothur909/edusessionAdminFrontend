@@ -1,9 +1,21 @@
-
-
 'use client';
 
-import { useState } from 'react';
-import { BoardDataUtils } from '../boardData';
+import { useState, useEffect } from 'react';
+
+interface BoardData {
+  _id: {
+    $oid: string;
+  };
+  board: string;
+  classes: Array<{
+    _id: {
+      $oid: string;
+    };
+    name: string;
+    subjects: string[];
+  }>;
+  __v: number;
+}
 
 interface Lead {
   _id: string;
@@ -33,7 +45,6 @@ interface EditLeadFormProps {
   onComplete: () => void;
 }
 
-const BOARDS = BoardDataUtils.getBoards();
 const LEAD_SOURCES = ['website', 'referral', 'social_media', 'other'];
 const MODES_OF_CONTACT = ['phone', 'whatsapp', 'email'];
 const STATUSES = [
@@ -44,30 +55,61 @@ const STATUSES = [
   'no_response_from_Lead'
 ];
 
-
-
-
 export default function EditLeadForm({ lead, onComplete }: EditLeadFormProps) {
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState(lead);
+  const [boardData, setBoardData] = useState<BoardData[]>([]);
+  const [boardLoading, setBoardLoading] = useState(true);
 
-    const baseUrl =process.env. BASE_URL;
+  const baseUrl = process.env.BASE_URL;
+
+  // Fetch board data on component mount
+  useEffect(() => {
+    const fetchBoardData = async () => {
+      try {
+        const response = await fetch(`${baseUrl}/api/admin/get-board-trees`);
+        if (!response.ok) {
+          throw new Error('Failed to fetch board data');
+        }
+        const data = await response.json();
+        setBoardData(data);
+      } catch (error) {
+        console.error('Error fetching board data:', error);
+        alert('Failed to load board data. Please refresh the page.');
+      } finally {
+        setBoardLoading(false);
+      }
+    };
+
+    fetchBoardData();
+  }, []);
+
+  // Get available boards
+  const getAvailableBoards = () => {
+    return boardData.map(board => board.board);
+  };
 
   // Get available classes for selected board
   const getAvailableClasses = () => {
-    return BoardDataUtils.getClassesForBoard(formData.board);
+    const selectedBoard = boardData.find(b => b.board === formData.board);
+    if (!selectedBoard) return [];
+    return selectedBoard.classes.map(cls => cls.name);
   };
 
   // Get available subjects for selected board and class
   const getAvailableSubjects = () => {
-    return BoardDataUtils.getSubjectsForBoardAndClass(formData.board, formData.class);
+    const selectedBoard = boardData.find(b => b.board === formData.board);
+    if (!selectedBoard) return [];
+
+    const selectedClass = selectedBoard.classes.find(cls => cls.name === formData.class);
+    return selectedClass?.subjects || [];
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    const { name, value, type } = e.target;
+    const { name, value } = e.target;
 
     setFormData(prev => {
-      let newFormData = { ...prev, [name]: value };
+      const newFormData = { ...prev, [name]: value };
 
       // Reset class and subjects when board changes
       if (name === 'board') {
@@ -289,12 +331,14 @@ export default function EditLeadForm({ lead, onComplete }: EditLeadFormProps) {
                     onChange={handleChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
                     required
+                    disabled={boardLoading}
                   >
                     <option value="">Select Board</option>
-                    {BOARDS.map((board) => (
-                      <option key={board} value={board}>{board}</option>
+                    {getAvailableBoards().map((boardName) => (
+                      <option key={boardName} value={boardName}>{boardName}</option>
                     ))}
                   </select>
+                  {boardLoading && <p className="text-gray-500 text-sm mt-1">Loading boards...</p>}
                 </div>
 
                 {/* Class */}
