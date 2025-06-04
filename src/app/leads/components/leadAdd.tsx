@@ -1,13 +1,11 @@
+"use client";
 
-'use client';
-
-import { useState } from 'react';
+import { useState } from "react";
 
 // Import board data
-import { BoardDataUtils } from '../boardData';
+import { BoardDataUtils } from "../boardData";
 
 export default function LeadForm() {
-
   interface LeadData {
     studentName: string;
     studentPhone: string;
@@ -22,40 +20,43 @@ export default function LeadForm() {
     modeOfContact: string;
     preferredTimeSlots: string;
     counsellor: string;
+    sesssionBeginDate: string;
     sessionEndDate: string;
-    remarks: string;
+    remarks: string[];
     notes: string;
   }
 
   const [formData, setFormData] = useState<LeadData>({
-    studentName: '',
-    studentPhone: '',
-    parentPhone: '',
-    email: '',
-    board: '',
-    class: '',
+    studentName: "",
+    studentPhone: "",
+    parentPhone: "",
+    email: "",
+    board: "",
+    class: "",
     subjects: [],
-    leadSource: '',
+    leadSource: "",
     classesPerWeek: 1,
-    courseInterested: '',
-    modeOfContact: '',
-    preferredTimeSlots:'',
-    counsellor: '',
-    sessionEndDate: '',
-    remarks: '',
-    notes: '',
+    courseInterested: "",
+    modeOfContact: "",
+    preferredTimeSlots: "",
+    counsellor: "",
+    sesssionBeginDate: "",
+    sessionEndDate: "",
+    remarks: [],
+    notes: "",
   });
-     
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
 
+  const baseUrl = process.env.BASE_URL;
 
-  const [errors, setErrors] = useState<Partial<Record<keyof LeadData, string>>>({});
+  const [errors, setErrors] = useState<Partial<Record<keyof LeadData, string>>>(
+    {}
+  );
   const [loading, setLoading] = useState(false);
 
   // Constants
   const BOARDS = BoardDataUtils.getBoards();
-  const LEAD_SOURCES = ['website', 'referral', 'social_media', 'other'];
-  const MODES_OF_CONTACT = ['phone', 'whatsapp', 'email'];
+  const LEAD_SOURCES = ["website", "referral", "social_media", "other"];
+  const MODES_OF_CONTACT = ["phone", "whatsapp", "email"];
 
   // Get available classes for selected board
   const getAvailableClasses = () => {
@@ -64,147 +65,163 @@ export default function LeadForm() {
 
   // Get available subjects for selected board and class
   const getAvailableSubjects = () => {
-    return BoardDataUtils.getSubjectsForBoardAndClass(formData.board, formData.class);
+    return BoardDataUtils.getSubjectsForBoardAndClass(
+      formData.board,
+      formData.class
+    );
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+  const handleChange = (
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+    >
+  ) => {
     const { name, value, type } = e.target;
-    
-    setFormData(prev => {
+
+    setFormData((prev) => {
       let newFormData;
-      
-      if (type === 'number') {
+
+      if (type === "number") {
         newFormData = { ...prev, [name]: Number(value) };
       } else {
         newFormData = { ...prev, [name]: value };
       }
-      
+
       // Reset class and subjects when board changes
-      if (name === 'board') {
-        newFormData.class = '';
+      if (name === "board") {
+        newFormData.class = "";
         newFormData.subjects = [];
       }
-      
+
       // Reset subjects when class changes
-      if (name === 'class') {
+      if (name === "class") {
         newFormData.subjects = [];
       }
-      
+
       return newFormData;
     });
   };
 
   const handleSubjectChange = (subject: string) => {
-    setFormData(prev => {
+    setFormData((prev) => {
       const currentSubjects = prev.subjects || [];
       const isSelected = currentSubjects.includes(subject);
-      
+
       if (isSelected) {
         // Remove subject
         return {
           ...prev,
-          subjects: currentSubjects.filter(s => s !== subject)
+          subjects: currentSubjects.filter((s) => s !== subject),
         };
       } else {
         // Add subject
         return {
           ...prev,
-          subjects: [...currentSubjects, subject]
+          subjects: [...currentSubjects, subject],
         };
       }
     });
   };
-
-  
 
   const validate = () => {
     const newErrors: Partial<Record<keyof LeadData, string>> = {};
 
     // studentName: required, min length 3
     if (!formData.studentName) {
-      newErrors.studentName = 'Student name is required';
+      newErrors.studentName = "Student name is required";
     } else if (formData.studentName.length < 3) {
-      newErrors.studentName = 'Student name must be at least 3 characters';
+      newErrors.studentName = "Student name must be at least 3 characters";
     }
 
     // studentPhone: required, exactly 10 digits
     if (!formData.studentPhone) {
-      newErrors.studentPhone = 'Student phone number is required';
+      newErrors.studentPhone = "Student phone number is required";
     } else if (!/^\d{10}$/.test(formData.studentPhone)) {
-      newErrors.studentPhone = 'Student phone must be exactly 10 digits';
+      newErrors.studentPhone = "Student phone must be exactly 10 digits";
     }
 
     // parentPhone: required, exactly 10 digits
     if (!formData.parentPhone) {
-      newErrors.parentPhone = 'Parent phone number is required';
+      newErrors.parentPhone = "Parent phone number is required";
     } else if (!/^\d{10}$/.test(formData.parentPhone)) {
-      newErrors.parentPhone = 'Parent phone must be exactly 10 digits';
+      newErrors.parentPhone = "Parent phone must be exactly 10 digits";
     }
 
     // email: optional, but if provided must be valid format
     if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      newErrors.email = 'Invalid email address';
+      newErrors.email = "Invalid email address";
     }
 
     // board: required, must be one of enum values
     if (!formData.board) {
-      newErrors.board = 'Board is required';
+      newErrors.board = "Board is required";
     } else if (!BOARDS.includes(formData.board)) {
-      newErrors.board = `Board must be one of: ${BOARDS.join(', ')}`;
+      newErrors.board = `Board must be one of: ${BOARDS.join(", ")}`;
     }
 
     // class: required
     if (!formData.class) {
-      newErrors.class = 'Class is required';
+      newErrors.class = "Class is required";
     }
 
     // subjects: required array with at least one item
-    if (!formData.subjects || !Array.isArray(formData.subjects) || formData.subjects.length === 0) {
-      newErrors.subjects = 'At least one subject is required';
+    if (
+      !formData.subjects ||
+      !Array.isArray(formData.subjects) ||
+      formData.subjects.length === 0
+    ) {
+      newErrors.subjects = "At least one subject is required";
     }
 
     // leadSource: required, enum check
     if (!formData.leadSource) {
-      newErrors.leadSource = 'Lead source is required';
+      newErrors.leadSource = "Lead source is required";
     } else if (!LEAD_SOURCES.includes(formData.leadSource)) {
-      newErrors.leadSource = `Lead source must be one of: ${LEAD_SOURCES.join(', ')}`;
+      newErrors.leadSource = `Lead source must be one of: ${LEAD_SOURCES.join(
+        ", "
+      )}`;
     }
 
     // classesPerWeek: required, number between 1 and 7
-    if (formData.classesPerWeek === undefined || formData.classesPerWeek === null) {
-      newErrors.classesPerWeek = 'Classes per week is required';
+    if (
+      formData.classesPerWeek === undefined ||
+      formData.classesPerWeek === null
+    ) {
+      newErrors.classesPerWeek = "Classes per week is required";
     } else if (formData.classesPerWeek < 1 || formData.classesPerWeek > 7) {
-      newErrors.classesPerWeek = 'Classes per week must be between 1 and 7';
+      newErrors.classesPerWeek = "Classes per week must be between 1 and 7";
     }
 
     // courseInterested: required, non-empty string
     if (!formData.courseInterested) {
-      newErrors.courseInterested = 'Course interested is required';
+      newErrors.courseInterested = "Course interested is required";
     }
 
     // modeOfContact: required, enum check
     if (!formData.modeOfContact) {
-      newErrors.modeOfContact = 'Mode of contact is required';
+      newErrors.modeOfContact = "Mode of contact is required";
     } else if (!MODES_OF_CONTACT.includes(formData.modeOfContact)) {
-      newErrors.modeOfContact = `Mode of contact must be one of: ${MODES_OF_CONTACT.join(', ')}`;
+      newErrors.modeOfContact = `Mode of contact must be one of: ${MODES_OF_CONTACT.join(
+        ", "
+      )}`;
     }
 
     // counsellor: required, non-empty string
     if (!formData.counsellor) {
-      newErrors.counsellor = 'Counsellor is required';
+      newErrors.counsellor = "Counsellor is required";
     }
 
     // sessionEndDate: optional, but if present, must be a valid date string
     if (formData.sessionEndDate) {
       const date = new Date(formData.sessionEndDate);
       if (isNaN(date.getTime())) {
-        newErrors.sessionEndDate = 'Invalid session end date';
+        newErrors.sessionEndDate = "Invalid session end date";
       }
     }
 
     return newErrors;
   };
-   
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const validationErrors = validate();
@@ -215,50 +232,51 @@ export default function LeadForm() {
     try {
       setLoading(true);
       const response = await fetch(`${baseUrl}/api/leads/addlead`, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify(formData),
       });
 
       if (!response.ok) {
-        throw new Error('Failed to submit lead');
+        throw new Error("Failed to submit lead");
       }
 
       const data = await response.json();
-      console.log('Lead submitted:', data);
-      
+      console.log("Lead submitted:", data);
+
       // Reset form
       setFormData({
-        studentName: '',
-        studentPhone: '',
-        parentPhone: '',
-        email: '',
-        board: '',
-        class: '',
+        studentName: "",
+        studentPhone: "",
+        parentPhone: "",
+        email: "",
+        board: "",
+        class: "",
         subjects: [],
-        leadSource: '',
+        leadSource: "",
         classesPerWeek: 1,
-        courseInterested: '',
-        modeOfContact: '',
-        counsellor: '',
-        sessionEndDate: '',
-        preferredTimeSlots:'',
-        remarks: '',
-        notes: '',
+        courseInterested: "",
+        modeOfContact: "",
+        counsellor: "",
+        sesssionBeginDate: "",
+        sessionEndDate: "",
+        preferredTimeSlots: "",
+        remarks: [],
+        notes: "",
       });
       setErrors({});
-      
+
       // Call success callback if provided
       // if (onSuccess) {
       //   onSuccess();
       // }
 
-      alert('Form submitted successfully!');
+      alert("Form submitted successfully!");
     } catch (error) {
-      console.error('Error submitting lead:', error);
-      alert('Something went wrong while submitting. Please try again.');
+      console.error("Error submitting lead:", error);
+      alert("Something went wrong while submitting. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -274,7 +292,9 @@ export default function LeadForm() {
 
         {/* Student Name */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Student Name</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Student Name
+          </label>
           <input
             type="text"
             name="studentName"
@@ -283,12 +303,16 @@ export default function LeadForm() {
             className="w-full border border-gray-300 p-3 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             required
           />
-          {errors.studentName && <p className="text-red-500 text-sm mt-1">{errors.studentName}</p>}
+          {errors.studentName && (
+            <p className="text-red-500 text-sm mt-1">{errors.studentName}</p>
+          )}
         </div>
 
         {/* Student Phone */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Student Phone</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Student Phone
+          </label>
           <input
             type="tel"
             name="studentPhone"
@@ -297,12 +321,16 @@ export default function LeadForm() {
             className="w-full border border-gray-300 p-3 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             required
           />
-          {errors.studentPhone && <p className="text-red-500 text-sm mt-1">{errors.studentPhone}</p>}
+          {errors.studentPhone && (
+            <p className="text-red-500 text-sm mt-1">{errors.studentPhone}</p>
+          )}
         </div>
 
         {/* Parent Phone */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Parent Phone</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Parent Phone
+          </label>
           <input
             type="tel"
             name="parentPhone"
@@ -311,12 +339,16 @@ export default function LeadForm() {
             className="w-full border border-gray-300 p-3 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             required
           />
-          {errors.parentPhone && <p className="text-red-500 text-sm mt-1">{errors.parentPhone}</p>}
+          {errors.parentPhone && (
+            <p className="text-red-500 text-sm mt-1">{errors.parentPhone}</p>
+          )}
         </div>
 
         {/* Email */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Email
+          </label>
           <input
             type="email"
             name="email"
@@ -324,12 +356,16 @@ export default function LeadForm() {
             onChange={handleChange}
             className="w-full border border-gray-300 p-3 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           />
-          {errors.email && <p className="text-red-500 text-sm mt-1">{errors.email}</p>}
+          {errors.email && (
+            <p className="text-red-500 text-sm mt-1">{errors.email}</p>
+          )}
         </div>
 
         {/* Board */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Board</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Board
+          </label>
           <select
             name="board"
             value={formData.board}
@@ -339,15 +375,21 @@ export default function LeadForm() {
           >
             <option value="">Select Board</option>
             {BOARDS.map((board) => (
-              <option key={board} value={board}>{board}</option>
+              <option key={board} value={board}>
+                {board}
+              </option>
             ))}
           </select>
-          {errors.board && <p className="text-red-500 text-sm mt-1">{errors.board}</p>}
+          {errors.board && (
+            <p className="text-red-500 text-sm mt-1">{errors.board}</p>
+          )}
         </div>
 
         {/* Class */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Class</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Class
+          </label>
           <select
             name="class"
             value={formData.class}
@@ -358,10 +400,14 @@ export default function LeadForm() {
           >
             <option value="">Select Class</option>
             {getAvailableClasses().map((className) => (
-              <option key={className} value={className}>{className}</option>
+              <option key={className} value={className}>
+                {className}
+              </option>
             ))}
           </select>
-          {errors.class && <p className="text-red-500 text-sm mt-1">{errors.class}</p>}
+          {errors.class && (
+            <p className="text-red-500 text-sm mt-1">{errors.class}</p>
+          )}
         </div>
 
         {/* Subjects */}
@@ -372,7 +418,10 @@ export default function LeadForm() {
           {formData.board && formData.class ? (
             <div className="border border-gray-300 rounded-md p-3 max-h-48 overflow-y-auto">
               {getAvailableSubjects().map((subject) => (
-                <label key={subject} className="flex items-center space-x-2 mb-2">
+                <label
+                  key={subject}
+                  className="flex items-center space-x-2 mb-2"
+                >
                   <input
                     type="checkbox"
                     checked={formData.subjects?.includes(subject) || false}
@@ -390,15 +439,19 @@ export default function LeadForm() {
           )}
           {formData.subjects && formData.subjects.length > 0 && (
             <div className="mt-2 text-sm text-gray-600">
-              Selected: {formData.subjects.join(', ')}
+              Selected: {formData.subjects.join(", ")}
             </div>
           )}
-          {errors.subjects && <p className="text-red-500 text-sm mt-1">{errors.subjects}</p>}
+          {errors.subjects && (
+            <p className="text-red-500 text-sm mt-1">{errors.subjects}</p>
+          )}
         </div>
 
         {/* Lead Source */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Lead Source</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Lead Source
+          </label>
           <select
             name="leadSource"
             value={formData.leadSource}
@@ -412,42 +465,63 @@ export default function LeadForm() {
             <option value="social_media">Social Media</option>
             <option value="other">Other</option>
           </select>
-          {errors.leadSource && <p className="text-red-500 text-sm mt-1">{errors.leadSource}</p>}
+          {errors.leadSource && (
+            <p className="text-red-500 text-sm mt-1">{errors.leadSource}</p>
+          )}
         </div>
 
         {/* Classes per Week */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Classes per Week</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Classes per Week
+          </label>
           <input
             type="number"
             name="classesPerWeek"
             value={formData.classesPerWeek}
-            onChange={handleChange}
-            min={1}
-            max={7}
+            onChange={(e) =>
+              setFormData({ ...formData, [e.target.name]: e.target.value })
+            }
+            onInput={(e) => {
+              const value = Number(e.target.value);
+              if (value > 7) {e.target.value = 7};
+              if (value < 1 && e.target.value !== "") {e.target.value = 1};
+            }}
+            min="1"
+            max="7"
             className="w-full border border-gray-300 p-3 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            required
+            
           />
-          {errors.classesPerWeek && <p className="text-red-500 text-sm mt-1">{errors.classesPerWeek}</p>}
+          {errors.classesPerWeek && (
+            <p className="text-red-500 text-sm mt-1">{errors.classesPerWeek}</p>
+          )}
         </div>
 
         {/* Course Interested */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Course Interested</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Course Interested
+          </label>
           <input
             type="text"
             name="courseInterested"
             value={formData.courseInterested}
             onChange={handleChange}
             className="w-full border border-gray-300 p-3 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            required
+          
           />
-          {errors.courseInterested && <p className="text-red-500 text-sm mt-1">{errors.courseInterested}</p>}
+          {errors.courseInterested && (
+            <p className="text-red-500 text-sm mt-1">
+              {errors.courseInterested}
+            </p>
+          )}
         </div>
 
         {/* Mode of Contact */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Mode of Contact</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Mode of Contact
+          </label>
           <select
             name="modeOfContact"
             value={formData.modeOfContact}
@@ -460,26 +534,53 @@ export default function LeadForm() {
             <option value="email">Email</option>
             <option value="whatsapp">WhatsApp</option>
           </select>
-          {errors.modeOfContact && <p className="text-red-500 text-sm mt-1">{errors.modeOfContact}</p>}
+          {errors.modeOfContact && (
+            <p className="text-red-500 text-sm mt-1">{errors.modeOfContact}</p>
+          )}
         </div>
 
         {/* Counsellor */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Counsellor</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Counsellor
+          </label>
           <input
             type="text"
             name="counsellor"
             value={formData.counsellor}
             onChange={handleChange}
             className="w-full border border-gray-300 p-3 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            required
+            
           />
-          {errors.counsellor && <p className="text-red-500 text-sm mt-1">{errors.counsellor}</p>}
+          {errors.counsellor && (
+            <p className="text-red-500 text-sm mt-1">{errors.counsellor}</p>
+          )}
+        </div>
+
+        {/* Session Begin Date */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Session Begin Date
+          </label>
+          <input
+            type="date"
+            name="sesssionBeginDate"
+            value={formData.sesssionBeginDate}
+            onChange={handleChange}
+            className="w-full border border-gray-300 p-3 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          />
+          {errors.sesssionBeginDate && (
+            <p className="text-red-500 text-sm mt-1">
+              {errors.sesssionBeginDate}
+            </p>
+          )}
         </div>
 
         {/* Session End Date */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Session End Date</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Session End Date
+          </label>
           <input
             type="date"
             name="sessionEndDate"
@@ -487,25 +588,35 @@ export default function LeadForm() {
             onChange={handleChange}
             className="w-full border border-gray-300 p-3 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           />
-          {errors.sessionEndDate && <p className="text-red-500 text-sm mt-1">{errors.sessionEndDate}</p>}
+          {errors.sessionEndDate && (
+            <p className="text-red-500 text-sm mt-1">{errors.sessionEndDate}</p>
+          )}
         </div>
 
         {/* Preferred Time */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Preferred Time</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Preferred Time
+          </label>
           <input
-            type="time"
+            type="text"
             name="preferredTimeSlots"
             value={formData.preferredTimeSlots}
             onChange={handleChange}
             className="w-full border border-gray-300 p-3 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           />
-          {errors.preferredTimeSlots && <p className="text-red-500 text-sm mt-1">{errors.preferredTimeSlots}</p>}
+          {errors.preferredTimeSlots && (
+            <p className="text-red-500 text-sm mt-1">
+              {errors.preferredTimeSlots}
+            </p>
+          )}
         </div>
 
         {/* Remarks */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Remarks</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Remarks
+          </label>
           <textarea
             name="remarks"
             value={formData.remarks}
@@ -517,7 +628,9 @@ export default function LeadForm() {
 
         {/* Notes */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Notes</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Notes
+          </label>
           <textarea
             name="notes"
             value={formData.notes}
@@ -532,7 +645,7 @@ export default function LeadForm() {
           className="w-full bg-blue-600 text-white py-3 px-6 rounded-md hover:bg-blue-700 transition duration-200 font-medium text-lg disabled:opacity-50 disabled:cursor-not-allowed"
           disabled={loading}
         >
-          {loading ? 'Submitting...' : 'Submit Lead'}
+          {loading ? "Submitting..." : "Submit Lead"}
         </button>
       </form>
     </div>

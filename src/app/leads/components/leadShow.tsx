@@ -167,7 +167,7 @@ export default function LeadsList() {
     fetchEnrolledStudents(); // Add this line to fetch enrolled students on component mount
   }, [activeTab]);
 
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+  const baseUrl = process.env.BASE_URL;
 
   // const fetchLeads = async () => {
   //   try {

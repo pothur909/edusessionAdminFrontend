@@ -54,7 +54,7 @@ export default function DemoLeadForm({ lead, onComplete, onCancel }: DemoLeadFor
   const [showAddSubject, setShowAddSubject] = useState(false);
   const [isViewMode, setIsViewMode] = useState(false);
   
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+  const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
 
   const [leadData, setLeadData] = useState<Lead>({
     ...lead,

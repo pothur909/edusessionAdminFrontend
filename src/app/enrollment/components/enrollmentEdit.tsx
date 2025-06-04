@@ -52,7 +52,7 @@ export default function EditEnrollmentForm({ studentId, onComplete, onCancel }: 
   const [fetchingData, setFetchingData] = useState(true);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+  const baseUrl = process.env.BASE_URL;
   const [formData, setFormData] = useState<Enrollment>({
     _id: '',
     lead: '',

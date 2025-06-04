@@ -4,7 +4,7 @@ const nextConfig: NextConfig = {
   /* config options here */
 
    env :{
-    NEXT_PUBLIC_BASE_URL : "http://localhost:6969"
+    BASE_URL: "http://localhost:6969"
    }
 
 };
