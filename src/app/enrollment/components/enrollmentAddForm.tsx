@@ -73,16 +73,28 @@ interface Enrollment {
   city: string;
   address: string;
   counsellor: string;
+  counsellorEmail: string;
+  counsellorPhone: string;
   studentUsername: string;
   password: string;
   studentRating: number;
-  subjects?: Subject[]; // Add this line
+  subjects?: Subject[];
+}
+
+interface Teacher {
+  _id: string;
+  name: string;
+  email: string;
+  phoneNumber: string;
+  isAvailable: boolean;
+  isLocked: boolean;
 }
 
 interface EnrollmentFormProps {
   lead: Lead;
   onComplete: () => void;
   onCancel: () => void;
+  teachers: Teacher[];
 }
 
 interface DemoResponse {
@@ -103,7 +115,7 @@ interface StudentResponse {
   data?: Enrollment;
 }
 
-export default function EnrollmentForm({ lead, onComplete, onCancel }: EnrollmentFormProps) {
+export default function EnrollmentForm({ lead, onComplete, onCancel, teachers }: EnrollmentFormProps) {
   const [loading, setLoading] = useState(false);
   const [fetchingData, setFetchingData] = useState(true);
   const [demo, setDemo] = useState<Demo | null>(null);
@@ -123,97 +135,91 @@ export default function EnrollmentForm({ lead, onComplete, onCancel }: Enrollmen
     city: '',
     address: '',
     counsellor: '',
+    counsellorEmail: '',
+    counsellorPhone: '',
     studentUsername: '',
     password: '',
     studentRating: 0
   });
 
-
-  
-    // Add these new functions here
-    const addNewSubject = () => {
-      const newSubject: Subject = {
-        student: '',
-        board: lead.board || '',
-        class: lead.class || '',
-        subject: '',
-        numberOfClassesPerWeek: lead.classesPerWeek || 0,
-        teacher: '',
-        timeSlots: [], // Initialize as empty array
-        paymentDetails: {
-          classAmount: 0,
-          amountPaid: 0,
-          lastPayments: []
-        },
-        remarks: []
-      };
-      setSubjects([...subjects, newSubject]);
+  const addNewSubject = () => {
+    const newSubject: Subject = {
+      student: '',
+      board: lead.board || '',
+      class: lead.class || '',
+      subject: '',
+      numberOfClassesPerWeek: lead.classesPerWeek || 0,
+      teacher: '',
+      timeSlots: [],
+      paymentDetails: {
+        classAmount: 0,
+        amountPaid: 0,
+        lastPayments: []
+      },
+      remarks: []
     };
-  
-    const removeSubject = (index: number) => {
-      const newSubjects = [...subjects];
-      newSubjects.splice(index, 1);
-      setSubjects(newSubjects);
-    };
+    setSubjects([...subjects, newSubject]);
+  };
 
+  const removeSubject = (index: number) => {
+    const newSubjects = [...subjects];
+    newSubjects.splice(index, 1);
+    setSubjects(newSubjects);
+  };
 
-
-    const handleSubjectChange = (index: number, field: string, value: any) => {
-      const newSubjects = [...subjects];
-      if (field.includes('.')) {
-        // Handle nested fields like paymentDetails.classAmount
-        const [parent, child] = field.split('.');
-        if (parent === 'paymentDetails') {
-          switch (child) {
-            case 'classAmount':
-              newSubjects[index].paymentDetails.classAmount = value;
-              break;
-            case 'amountPaid':
-              newSubjects[index].paymentDetails.amountPaid = value;
-              break;
-            case 'lastPayments':
-              newSubjects[index].paymentDetails.lastPayments = value;
-              break;
-            default:
-              console.warn(`Unknown paymentDetails field: ${child}`);
-          }
+  const handleSubjectChange = (index: number, field: string, value: any) => {
+    const newSubjects = [...subjects];
+    if (field.includes('.')) {
+      const [parent, child] = field.split('.');
+      if (parent === 'paymentDetails') {
+        switch (child) {
+          case 'classAmount':
+            newSubjects[index].paymentDetails.classAmount = value;
+            break;
+          case 'amountPaid':
+            newSubjects[index].paymentDetails.amountPaid = value;
+            break;
+          case 'lastPayments':
+            newSubjects[index].paymentDetails.lastPayments = value;
+            break;
+          default:
+            console.warn(`Unknown paymentDetails field: ${child}`);
         }
-      } else {
-        // Handle direct fields
-        switch (field) {
-          case 'subject':
-            newSubjects[index].subject = value;
-            break;
-          case 'teacher':
-            newSubjects[index].teacher = value;
-            break;
-          case 'numberOfClassesPerWeek':
-            newSubjects[index].numberOfClassesPerWeek = value;
-        break;
-      case 'timeSlots':
-        newSubjects[index].timeSlots = value;
-        break;
-      case 'board':
-        newSubjects[index].board = value;
-        break;
-      case 'class':
-        newSubjects[index].class = value;
-        break;
-      case 'remarks':
-        newSubjects[index].remarks = value;
-        break;
-      default:
-        console.warn(`Unknown field: ${field}`);
+      }
+    } else {
+      switch (field) {
+        case 'subject':
+          newSubjects[index].subject = value;
+          break;
+        case 'teacher':
+          newSubjects[index].teacher = value;
+          break;
+        case 'numberOfClassesPerWeek':
+          newSubjects[index].numberOfClassesPerWeek = value;
+          break;
+        case 'timeSlots':
+          newSubjects[index].timeSlots = value;
+          break;
+        case 'board':
+          newSubjects[index].board = value;
+          break;
+        case 'class':
+          newSubjects[index].class = value;
+          break;
+        case 'remarks':
+          newSubjects[index].remarks = value;
+          break;
+        default:
+          console.warn(`Unknown field: ${field}`);
+      }
     }
-  }
-  setSubjects(newSubjects);
-};
-
+    setSubjects(newSubjects);
+  };
 
   const initializeSubjectsFromLead = (lead: Lead) => {
     if (lead.subjects && lead.subjects.length > 0) {
       const initialSubjects: Subject[] = lead.subjects.map(subject => ({
-        student: '', // Will be set after student creation
+        student: '',
         board: lead.board || '',
         class: lead.class || '',
         subject: subject,
@@ -246,6 +252,8 @@ export default function EnrollmentForm({ lead, onComplete, onCancel }: Enrollmen
       city: lead.city || '',
       address: '',
       counsellor: lead.counsellor || '',
+      counsellorEmail: '',
+      counsellorPhone: '',
       studentUsername: '',
       password: '',
       studentRating: 0
@@ -255,21 +263,15 @@ export default function EnrollmentForm({ lead, onComplete, onCancel }: Enrollmen
     setFormData(initialFormData);
   };
 
-  
-
   useEffect(() => {
     const fetchData = async () => {
       try {
         setFetchingData(true);
 
-
-
-        // If we have demo data in the lead, use it
         if (lead.demo) {
           console.log('Using demo data from lead:', lead.demo);
           setDemo(lead.demo);
         } else {
-          // If no demo data in lead, try to fetch it
           try {
             const demoResponse = await fetch(`${baseUrl}/api/demo/view/${lead._id}`);
             const demoData: DemoResponse = await demoResponse.json();
@@ -283,7 +285,6 @@ export default function EnrollmentForm({ lead, onComplete, onCancel }: Enrollmen
           }
         }
 
-        // If we have an existing student ID, fetch that student's data
         if (lead.existingStudentId) {
           try {
             console.log('Fetching existing student with ID:', lead.existingStudentId);
@@ -291,7 +292,6 @@ export default function EnrollmentForm({ lead, onComplete, onCancel }: Enrollmen
             const data = await response.json();
             console.log('Existing student data:', data);
 
-            // Handle both array and object responses
             const existingEnrollment = Array.isArray(data) ? data[0] : data;
 
             if (existingEnrollment) {
@@ -309,19 +309,19 @@ export default function EnrollmentForm({ lead, onComplete, onCancel }: Enrollmen
                 city: existingEnrollment.city || lead.city || '',
                 address: existingEnrollment.address || '',
                 counsellor: existingEnrollment.counsellor || lead.counsellor || '',
+                counsellorEmail: existingEnrollment.counsellorEmail || '',
+                counsellorPhone: existingEnrollment.counsellorPhone || '',
                 studentUsername: existingEnrollment.studentUsername || '',
                 password: existingEnrollment.password || '',
                 studentRating: existingEnrollment.studentRating || 0
               });
 
-              // Fetch subjects for this student
               try {
                 const subjectsResponse = await fetch(`${baseUrl}/api/subject/${existingEnrollment._id}`);
                 const subjectsData = await subjectsResponse.json();
                 console.log('Fetched subjects data:', subjectsData);
                 
                 if (subjectsData.success && subjectsData.data) {
-                  // Transform the subjects data to match our Subject interface
                   const transformedSubjects = subjectsData.data.map((subject: any) => ({
                     student: subject.student,
                     board: subject.board,
@@ -350,13 +350,11 @@ export default function EnrollmentForm({ lead, onComplete, onCancel }: Enrollmen
           }
         }
 
-        // If no existing student or error occurred, initialize with lead data
         initializeFormWithLeadData();
 
-        // Initialize subjects from lead data for new enrollment
         if (lead.subjects && lead.subjects.length > 0) {
           const initialSubjects: Subject[] = lead.subjects.map(subject => ({
-            student: '', // Will be set after student creation
+            student: '',
             board: lead.board || '',
             class: lead.class || '',
             subject: subject,
@@ -372,7 +370,6 @@ export default function EnrollmentForm({ lead, onComplete, onCancel }: Enrollmen
           }));
           setSubjects(initialSubjects);
         }
-
 
       } catch (error) {
         console.error('Error in fetchData:', error);
@@ -426,7 +423,6 @@ export default function EnrollmentForm({ lead, onComplete, onCancel }: Enrollmen
   };
 
   const validateForm = async (): Promise<boolean> => {
-    // Basic field validation
     if (!formData.studentName || !formData.phoneNumber || !formData.email || !formData.studentUsername || !formData.password) {
       alert('Please fill in all required fields');
       return false;
@@ -442,7 +438,6 @@ export default function EnrollmentForm({ lead, onComplete, onCancel }: Enrollmen
       return false;
     }
 
-    // Check for duplicates (email, phone, username)
     try {
       const response = await fetch(`${baseUrl}/api/students`);
       if (response.ok) {
@@ -450,7 +445,7 @@ export default function EnrollmentForm({ lead, onComplete, onCancel }: Enrollmen
         if (data.success && data.data) {
           const duplicateStudent = data.data.find(
             (student: Enrollment) =>
-              student._id !== existingStudentId && // Exclude current student when editing
+              student._id !== existingStudentId &&
               (
                 (student.email && student.email.toLowerCase() === formData.email.toLowerCase()) ||
                 (student.phoneNumber && student.phoneNumber === formData.phoneNumber) ||
@@ -477,21 +472,17 @@ export default function EnrollmentForm({ lead, onComplete, onCancel }: Enrollmen
     setError(null);
 
     try {
-      // Validate form
       const isValid = await validateForm();
       if (!isValid) {
         return;
       }
 
-      // Prepare the data to submit
       const submitData = { ...formData };
 
-      // Remove _id from submitData for new students
       if (!isEditing) {
         delete submitData._id;
       }
 
-      // Determine URL and method based on whether we're updating or creating
       const url = isEditing && existingStudentId
         ? `${baseUrl}/api/students/${existingStudentId}`
         : `${baseUrl}/api/students`;
@@ -502,7 +493,6 @@ export default function EnrollmentForm({ lead, onComplete, onCancel }: Enrollmen
       console.log('URL:', url);
       console.log('Method:', method);
 
-      // Submit enrollment data
       const response = await fetch(url, {
         method,
         headers: {
@@ -523,22 +513,17 @@ export default function EnrollmentForm({ lead, onComplete, onCancel }: Enrollmen
         throw new Error('Failed to get student ID from response');
       }
 
-      // Handle subjects one by one
       try {
         console.log('Starting to handle subjects:', subjects);
         
-        // Process each subject sequentially
         for (const subject of subjects) {
-          // Format time slots properly
           let formattedTimeSlots: string[] = [];
 
           if (Array.isArray(subject.timeSlots)) {
-            // If it's already an array, ensure all elements are strings
             formattedTimeSlots = subject.timeSlots
               .map((slot: string) => typeof slot === 'string' ? slot.trim() : String(slot))
               .filter((slot: string) => slot !== '');
           } else if (typeof subject.timeSlots === 'string') {
-            // If it's a string, split by comma and trim each slot
             formattedTimeSlots = subject.timeSlots
               .split(',')
               .map((slot: string) => slot.trim())
@@ -583,7 +568,6 @@ export default function EnrollmentForm({ lead, onComplete, onCancel }: Enrollmen
         console.error('Error handling subjects:', error);
       }
 
-      // Update lead status to converted
       try {
         const leadUpdateResponse = await fetch(`${baseUrl}/api/leads/editlead/${lead._id}`, {
           method: 'PUT',
@@ -628,7 +612,6 @@ export default function EnrollmentForm({ lead, onComplete, onCancel }: Enrollmen
       </h2>
 
       <form onSubmit={handleSubmit} className="space-y-6 text-black">
-        {/* Lead Information Section */}
         <div className="bg-blue-50 p-4 rounded-md mb-6">
           <h3 className="text-lg font-medium mb-4">Lead Information</h3>
           <div className="grid grid-cols-3 gap-4 text-sm">
@@ -653,7 +636,6 @@ export default function EnrollmentForm({ lead, onComplete, onCancel }: Enrollmen
           </div>
         </div>
 
-        {/* Demo Information Section */}
         {demo && (
           <div className="bg-green-50 p-4 rounded-md mb-6">
             <h3 className="text-lg font-medium mb-4">Demo Information</h3>
@@ -680,7 +662,6 @@ export default function EnrollmentForm({ lead, onComplete, onCancel }: Enrollmen
           </div>
         )}
 
-        {/* Student Enrollment Form */}
         <div className="bg-gray-50 p-4 rounded-md">
           <h3 className="text-lg font-medium mb-4">Student Enrollment Details</h3>
           <div className="grid grid-cols-2 gap-4">
@@ -775,6 +756,28 @@ export default function EnrollmentForm({ lead, onComplete, onCancel }: Enrollmen
               />
             </div>
             <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Counselor Email *</label>
+              <input
+                type="email"
+                name="counsellorEmail"
+                value={formData.counsellorEmail}
+                onChange={handleChange}
+                required
+                className="border p-3 rounded-md w-full"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Counselor Phone *</label>
+              <input
+                type="text"
+                name="counsellorPhone"
+                value={formData.counsellorPhone}
+                onChange={handleChange}
+                required
+                className="border p-3 rounded-md w-full"
+              />
+            </div>
+            <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Student Rating</label>
               <input
                 type="number"
@@ -789,7 +792,6 @@ export default function EnrollmentForm({ lead, onComplete, onCancel }: Enrollmen
             </div>
           </div>
 
-          {/* Login Credentials Section */}
           <div className="mt-6 pt-4 border-t">
             <div className="flex justify-between items-center mb-4">
               <h4 className="text-md font-medium">Login Credentials</h4>
@@ -827,96 +829,101 @@ export default function EnrollmentForm({ lead, onComplete, onCancel }: Enrollmen
             </div>
           </div>
 
-
-
-
-         {/* Replace your existing subjects section with this new version */}
-      <div className="space-y-4 mt-4">
-        <div className="flex justify-between items-center">
-          <h3 className="text-lg font-medium">Subjects</h3>
-          <button
-            type="button"
-            onClick={addNewSubject}
-            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-          >
-            Add Subject
-          </button>
-        </div>
-        
-        {subjects.map((subject, index) => (
-          <div key={index} className="border p-4 rounded-lg">
-            <div className="flex justify-between items-center mb-4">
-              <h4 className="text-md font-medium">Subject {index + 1}</h4>
+          <div className="space-y-4 mt-4">
+            <div className="flex justify-between items-center">
+              <h3 className="text-lg font-medium">Subjects</h3>
               <button
                 type="button"
-                onClick={() => removeSubject(index)}
-                className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600"
+                onClick={addNewSubject}
+                className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
               >
-                Remove
+                Add Subject
               </button>
             </div>
             
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Subject</label>
-                <input
-                  type="text"
-                  value={subject.subject}
-                  onChange={(e) => handleSubjectChange(index, 'subject', e.target.value)}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                />
+            {subjects.map((subject, index) => (
+              <div key={index} className="border p-4 rounded-lg">
+                <div className="flex justify-between items-center mb-4">
+                  <h4 className="text-md font-medium">Subject {index + 1}</h4>
+                  <button
+                    type="button"
+                    onClick={() => removeSubject(index)}
+                    className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600"
+                  >
+                    Remove
+                  </button>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Subject</label>
+                    <input
+                      type="text"
+                      value={subject.subject}
+                      onChange={(e) => handleSubjectChange(index, 'subject', e.target.value)}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Teacher</label>
+                    <select
+                      value={subject.teacher}
+                      onChange={(e) => handleSubjectChange(index, 'teacher', e.target.value)}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    >
+                      <option value="">Select a teacher</option>
+                      {teachers.map((teacher) => (
+                        <option 
+                          key={teacher._id} 
+                          value={teacher._id}
+                          disabled={!teacher.isAvailable || teacher.isLocked}
+                        >
+                          {teacher.name} {(!teacher.isAvailable || teacher.isLocked) ? '(Not Available)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Classes Per Week</label>
+                    <input
+                      type="number"
+                      value={subject.numberOfClassesPerWeek}
+                      onChange={(e) => handleSubjectChange(index, 'numberOfClassesPerWeek', parseInt(e.target.value))}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Time Slots</label>
+                    <input
+                      type="text"
+                      value={Array.isArray(subject.timeSlots) ? subject.timeSlots.join(', ') : subject.timeSlots}
+                      onChange={(e) => handleSubjectChange(index, 'timeSlots', e.target.value.split(',').map(slot => slot.trim()))}
+                      placeholder="Enter time slots separated by commas (e.g., Monday 3:00 PM, Wednesday 4:00 PM)"
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Class Amount</label>
+                    <input
+                      type="number"
+                      value={subject.paymentDetails.classAmount}
+                      onChange={(e) => handleSubjectChange(index, 'paymentDetails.classAmount', parseInt(e.target.value))}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Amount Paid</label>
+                    <input
+                      type="number"
+                      value={subject.paymentDetails.amountPaid}
+                      onChange={(e) => handleSubjectChange(index, 'paymentDetails.amountPaid', parseInt(e.target.value))}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Teacher</label>
-                <input
-                  type="text"
-                  value={subject.teacher}
-                  onChange={(e) => handleSubjectChange(index, 'teacher', e.target.value)}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Classes Per Week</label>
-                <input
-                  type="number"
-                  value={subject.numberOfClassesPerWeek}
-                  onChange={(e) => handleSubjectChange(index, 'numberOfClassesPerWeek', parseInt(e.target.value))}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Time Slots</label>
-                <input
-                  type="text"
-                  value={Array.isArray(subject.timeSlots) ? subject.timeSlots.join(', ') : subject.timeSlots}
-                  onChange={(e) => handleSubjectChange(index, 'timeSlots', e.target.value.split(',').map(slot => slot.trim()))}
-                  placeholder="Enter time slots separated by commas (e.g., Monday 3:00 PM, Wednesday 4:00 PM)"
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Class Amount</label>
-                <input
-                  type="number"
-                  value={subject.paymentDetails.classAmount}
-                  onChange={(e) => handleSubjectChange(index, 'paymentDetails.classAmount', parseInt(e.target.value))}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Amount Paid</label>
-                <input
-                  type="number"
-                  value={subject.paymentDetails.amountPaid}
-                  onChange={(e) => handleSubjectChange(index, 'paymentDetails.amountPaid', parseInt(e.target.value))}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                />
-              </div>
-            </div>
+            ))}
           </div>
-        ))}
-      </div>
-  
         </div>
 
         <div className="flex justify-end space-x-4">

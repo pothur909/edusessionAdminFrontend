@@ -1,12 +1,23 @@
-
 'use client';
 
-import { useState } from 'react';
-
-// Import board data
-import { BoardDataUtils } from '../boardData';
+import { useState, useEffect } from 'react';
 
 export default function LeadForm() {
+
+  interface BoardData {
+    _id: {
+      $oid: string;
+    };
+    board: string;
+    classes: Array<{
+      _id: {
+        $oid: string;
+      };
+      name: string;
+      subjects: string[];
+    }>;
+    __v: number;
+  }
 
   interface LeadData {
     studentName: string;
@@ -45,26 +56,59 @@ export default function LeadForm() {
     remarks: '',
     notes: '',
   });
-     
-    const baseUrl =process.env. BASE_URL;
 
+  const [boardData, setBoardData] = useState<BoardData[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [boardLoading, setBoardLoading] = useState(true);
+
+  const baseUrl =process.env. BASE_URL;
 
   const [errors, setErrors] = useState<Partial<Record<keyof LeadData, string>>>({});
-  const [loading, setLoading] = useState(false);
 
   // Constants
-  const BOARDS = BoardDataUtils.getBoards();
   const LEAD_SOURCES = ['website', 'referral', 'social_media', 'other'];
   const MODES_OF_CONTACT = ['phone', 'whatsapp', 'email'];
 
+  // Fetch board data on component mount
+  useEffect(() => {
+    const fetchBoardData = async () => {
+      try {
+        const response = await fetch(`${baseUrl}/api/admin/get-board-trees`);
+        if (!response.ok) {
+          throw new Error('Failed to fetch board data');
+        }
+        const data = await response.json();
+        setBoardData(data);
+      } catch (error) {
+        console.error('Error fetching board data:', error);
+        alert('Failed to load board data. Please refresh the page.');
+      } finally {
+        setBoardLoading(false);
+      }
+    };
+
+    fetchBoardData();
+  }, []);
+
+  // Get available boards
+  const getAvailableBoards = () => {
+    return boardData.map(board => board.board);
+  };
+
   // Get available classes for selected board
   const getAvailableClasses = () => {
-    return BoardDataUtils.getClassesForBoard(formData.board);
+    const selectedBoard = boardData.find(b => b.board === formData.board);
+    if (!selectedBoard) return [];
+    return selectedBoard.classes.map(cls => cls.name);
   };
 
   // Get available subjects for selected board and class
   const getAvailableSubjects = () => {
-    return BoardDataUtils.getSubjectsForBoardAndClass(formData.board, formData.class);
+    const selectedBoard = boardData.find(b => b.board === formData.board);
+    if (!selectedBoard) return [];
+
+    const selectedClass = selectedBoard.classes.find(cls => cls.name === formData.class);
+    return selectedClass?.subjects || [];
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -115,8 +159,6 @@ export default function LeadForm() {
     });
   };
 
-  
-
   const validate = () => {
     const newErrors: Partial<Record<keyof LeadData, string>> = {};
 
@@ -149,8 +191,8 @@ export default function LeadForm() {
     // board: required, must be one of enum values
     if (!formData.board) {
       newErrors.board = 'Board is required';
-    } else if (!BOARDS.includes(formData.board)) {
-      newErrors.board = `Board must be one of: ${BOARDS.join(', ')}`;
+    } else if (!getAvailableBoards().includes(formData.board)) {
+      newErrors.board = `Board must be one of: ${getAvailableBoards().join(', ')}`;
     }
 
     // class: required
@@ -336,12 +378,14 @@ export default function LeadForm() {
             onChange={handleChange}
             className="w-full border border-gray-300 p-3 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             required
+            disabled={boardLoading}
           >
             <option value="">Select Board</option>
-            {BOARDS.map((board) => (
-              <option key={board} value={board}>{board}</option>
+            {getAvailableBoards().map((boardName) => (
+              <option key={boardName} value={boardName}>{boardName}</option>
             ))}
           </select>
+          {boardLoading && <p className="text-gray-500 text-sm mt-1">Loading boards...</p>}
           {errors.board && <p className="text-red-500 text-sm mt-1">{errors.board}</p>}
         </div>
 
