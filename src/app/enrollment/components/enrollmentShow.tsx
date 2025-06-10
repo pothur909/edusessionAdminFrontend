@@ -20,7 +20,26 @@ interface Enrollment {
   createdAt: string;
   updatedAt: string;
   status?: 'active' | 'inactive' | 'graduated' | 'dropped';
-  
+  subjects?: {
+    _id?: string;
+    student: string;
+    board: string;
+    class: string;
+    subject: string;
+    numberOfClassesPerWeek: number;
+    teacher: string;
+    timeSlots: string[];
+    paymentDetails: {
+      classAmount: number;
+      amountPaid: number;
+      lastPayments: {
+        paymentId: string;
+        date: Date;
+        amount: number;
+      }[];
+    };
+    remarks: string[];
+  }[];
 }
 
 interface EnrollmentResponse {
@@ -38,6 +57,8 @@ export default function EnrollmentList() {
   // const [deleteLoading, setDeleteLoading] = useState<string | null>(null);
   const [editingEnrollment, setEditingEnrollment] = useState<Enrollment | null>(null);
   const [showEditForm, setShowEditForm] = useState(false);
+  const [selectedEnrollment, setSelectedEnrollment] = useState<Enrollment | null>(null);
+  const [showViewModal, setShowViewModal] = useState(false);
   const baseUrl =process.env. BASE_URL;
 
   // Pagination states
@@ -127,6 +148,34 @@ export default function EnrollmentList() {
   const handleEditCancel = () => {
     setEditingEnrollment(null);
     setShowEditForm(false);
+  };
+
+  const handleViewClick = async (enrollment: Enrollment) => {
+    try {
+      console.log('Fetching details for enrollment:', enrollment._id);
+      // Fetch complete enrollment details including subjects
+      const response = await fetch(`${baseUrl}/api/students/${enrollment._id}`);
+      console.log('Response status:', response.status);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Error response:', errorText);
+        throw new Error(`Failed to fetch enrollment details: ${response.status} ${errorText}`);
+      }
+      
+      const data = await response.json();
+      console.log('Fetched enrollment data:', data);
+      
+      if (!data.data) {
+        throw new Error('No data received from the server');
+      }
+      
+      setSelectedEnrollment(data.data);
+      setShowViewModal(true);
+    } catch (error) {
+      console.error('Error in handleViewClick:', error);
+      alert(error instanceof Error ? error.message : 'Failed to fetch enrollment details');
+    }
   };
 
   const filteredEnrollments = enrollments.filter((enrollment) => {
@@ -344,18 +393,17 @@ export default function EnrollmentList() {
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                           <div className="flex flex-col items-start gap-1">
                             <button
+                              onClick={() => handleViewClick(enrollment)}
+                              className="text-blue-600 hover:text-blue-900"
+                            >
+                              View
+                            </button>
+                            <button
                               onClick={() => handleEditClick(enrollment)}
                               className="text-blue-600 hover:text-blue-900"
                             >
                               Edit
                             </button>
-                            {/* <button
-                              onClick={() => handleDeleteEnrollment(enrollment._id)}
-                              disabled={deleteLoading === enrollment._id}
-                              className="text-red-600 hover:text-red-900 disabled:opacity-50"
-                            >
-                              {deleteLoading === enrollment._id ? 'Deleting...' : 'Delete'}
-                            </button> */}
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
@@ -439,6 +487,97 @@ export default function EnrollmentList() {
             </div>
           )}
         </>
+      )}
+
+      {showViewModal && selectedEnrollment && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-4/5 shadow-lg rounded-md bg-white">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-2xl font-bold text-gray-900">Enrollment Details</h3>
+              <button
+                onClick={() => {
+                  setShowViewModal(false);
+                  setSelectedEnrollment(null);
+                }}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4 mb-6">
+              <div>
+                <h4 className="font-semibold text-gray-700">Student Information</h4>
+                <p><span className="font-medium">Name:</span> {selectedEnrollment.studentName}</p>
+                <p><span className="font-medium">Age:</span> {selectedEnrollment.age}</p>
+                <p><span className="font-medium">Phone:</span> {selectedEnrollment.phoneNumber}</p>
+                <p><span className="font-medium">Parents Phone:</span> {selectedEnrollment.parentsPhoneNumbers?.join(', ') || 'Not provided'}</p>
+                <p><span className="font-medium">Email:</span> {selectedEnrollment.email}</p>
+              </div>
+              <div>
+                <h4 className="font-semibold text-gray-700">Location Details</h4>
+                <p><span className="font-medium">City:</span> {selectedEnrollment.city}</p>
+                <p><span className="font-medium">Address:</span> {selectedEnrollment.address}</p>
+                <p><span className="font-medium">Counsellor:</span> {selectedEnrollment.counsellor}</p>
+              </div>
+            </div>
+
+            <div className="mb-6">
+              <h4 className="font-semibold text-gray-700 mb-2">Account Information</h4>
+              <p><span className="font-medium">Username:</span> {selectedEnrollment.studentUsername}</p>
+              <p><span className="font-medium">Rating:</span> {selectedEnrollment.studentRating}/5</p>
+              <p><span className="font-medium">Status:</span> {selectedEnrollment.status || 'Active'}</p>
+              <p><span className="font-medium">Enrolled On:</span> {new Date(selectedEnrollment.createdAt).toLocaleDateString()}</p>
+            </div>
+
+            {selectedEnrollment.subjects && selectedEnrollment.subjects.length > 0 ? (
+              <div>
+                <h4 className="font-semibold text-gray-700 mb-2">Subjects</h4>
+                <div className="space-y-4">
+                  {selectedEnrollment.subjects.map((subject, index) => (
+                    <div key={subject._id || index} className="border p-4 rounded-lg bg-gray-50">
+                      <h5 className="font-medium text-lg mb-2">{subject.subject}</h5>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <p><span className="font-medium">Board:</span> {subject.board}</p>
+                          <p><span className="font-medium">Class:</span> {subject.class}</p>
+                          <p><span className="font-medium">Classes per Week:</span> {subject.numberOfClassesPerWeek}</p>
+                          <p><span className="font-medium">Teacher:</span> {subject.teacher}</p>
+                        </div>
+                        <div>
+                          <p><span className="font-medium">Time Slots:</span></p>
+                          <ul className="list-disc list-inside">
+                            {subject.timeSlots?.map((slot, i) => (
+                              <li key={i}>{slot}</li>
+                            ))}
+                          </ul>
+                          <p><span className="font-medium">Class Amount:</span> ₹{subject.paymentDetails?.classAmount || 0}</p>
+                          <p><span className="font-medium">Amount Paid:</span> ₹{subject.paymentDetails?.amountPaid || 0}</p>
+                        </div>
+                      </div>
+                      {subject.remarks && subject.remarks.length > 0 && (
+                        <div className="mt-2">
+                          <p className="font-medium">Remarks:</p>
+                          <ul className="list-disc list-inside">
+                            {subject.remarks.map((remark, i) => (
+                              <li key={i}>{remark}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="text-gray-500 text-center py-4">
+                No subjects found for this enrollment.
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

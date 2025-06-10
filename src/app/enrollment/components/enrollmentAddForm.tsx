@@ -29,23 +29,30 @@ interface Lead {
 }
 
 interface Subject {
-  student: string; // This will be the ObjectId reference
+  _id?: string;
+  student: string;
   board: string;
   class: string;
   subject: string;
   numberOfClassesPerWeek: number;
   teacher: string;
-  timeSlots: string[]; // Array of strings
+  timeSlots: string[];
   paymentDetails: {
     classAmount: number;
     amountPaid: number;
-    lastPayments: Array<{
+    lastPayments: {
       paymentId: string;
       date: Date;
       amount: number;
-    }>;
+    }[];
   };
-  remarks: string[]; // Array of strings
+  meetingDetails?: {
+    startUrl?: string;
+    joinUrl?: string;
+    meetingId?: string;
+    password?: string;
+  };
+  remarks: string[];
 }
 
 interface Demo {
@@ -466,6 +473,42 @@ export default function EnrollmentForm({ lead, onComplete, onCancel, teachers }:
     return true;
   };
 
+  const createZoomMeeting = async (subject: Subject, studentName: string): Promise<Subject> => {
+    try {
+      const response = await fetch(`${baseUrl}/api/zoom/permanent/create`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          topic: `${subject.subject} Class - ${studentName}`,
+          options: {
+            enableChat: true,
+            enableRecording: true
+          }
+        })
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        return {
+          ...subject,
+          meetingDetails: {
+            meetingId: data.data.id.toString(),
+            joinUrl: data.data.join_url,
+            password: data.data.password,
+            startUrl: data.data.start_url
+          }
+        };
+      } else {
+        throw new Error(data.message || 'Failed to create Zoom meeting');
+      }
+    } catch (error) {
+      console.error('Error creating Zoom meeting:', error);
+      throw error;
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -474,6 +517,7 @@ export default function EnrollmentForm({ lead, onComplete, onCancel, teachers }:
     try {
       const isValid = await validateForm();
       if (!isValid) {
+        setLoading(false);
         return;
       }
 
@@ -513,80 +557,101 @@ export default function EnrollmentForm({ lead, onComplete, onCancel, teachers }:
         throw new Error('Failed to get student ID from response');
       }
 
-      try {
-        console.log('Starting to handle subjects:', subjects);
+      // Create Zoom meetings for each subject
+      const subjectsWithMeetings = await Promise.all(
+        subjects.map(async (subject) => {
+          try {
+            const subjectWithMeeting = await createZoomMeeting(subject, formData.studentName);
+            
+            // Ensure all required fields are present and properly formatted
+            const formattedSubject = {
+              student: studentId,
+              board: String(subject.board || ''),
+              class: String(subject.class || ''),
+              subject: String(subject.subject || ''),
+              numberOfClassesPerWeek: Number(subject.numberOfClassesPerWeek) || 0,
+              teacher: String(subject.teacher || ''),
+              timeSlots: Array.isArray(subject.timeSlots) ? subject.timeSlots.map(String) : [String(subject.timeSlots)].flat(),
+              paymentDetails: {
+                classAmount: Number(subject.paymentDetails.classAmount) || 0,
+                amountPaid: Number(subject.paymentDetails.amountPaid) || 0,
+                lastPayments: Array.isArray(subject.paymentDetails.lastPayments) && subject.paymentDetails.lastPayments.length > 0
+                  ? subject.paymentDetails.lastPayments.map(payment => ({
+                      paymentId: String(payment.paymentId || ''),
+                      date: new Date(payment.date || Date.now()),
+                      amount: Number(payment.amount) || 0
+                    }))
+                  : []
+              },
+              remarks: Array.isArray(subject.remarks) ? subject.remarks.map(String) : [],
+              meetingDetails: subjectWithMeeting.meetingDetails ? {
+                startUrl: String(subjectWithMeeting.meetingDetails.startUrl || ''),
+                joinUrl: String(subjectWithMeeting.meetingDetails.joinUrl || ''),
+                meetingId: String(subjectWithMeeting.meetingDetails.meetingId || ''),
+                password: String(subjectWithMeeting.meetingDetails.password || '')
+              } : undefined
+            };
+
+            // Validate required fields
+            if (!formattedSubject.board || !formattedSubject.class || !formattedSubject.subject || 
+                !formattedSubject.numberOfClassesPerWeek || !formattedSubject.teacher || 
+                !formattedSubject.timeSlots.length || !formattedSubject.paymentDetails.classAmount) {
+              throw new Error('Missing required fields in subject');
+            }
+
+            // Log each formatted subject for debugging
+            console.log('Formatted subject:', JSON.stringify(formattedSubject, null, 2));
+
+            return formattedSubject;
+          } catch (error) {
+            console.error(`Failed to create meeting for subject ${subject.subject}:`, error);
+            return {
+              student: studentId,
+              board: String(subject.board || ''),
+              class: String(subject.class || ''),
+              subject: String(subject.subject || ''),
+              numberOfClassesPerWeek: Number(subject.numberOfClassesPerWeek) || 0,
+              teacher: String(subject.teacher || ''),
+              timeSlots: Array.isArray(subject.timeSlots) ? subject.timeSlots.map(String) : [String(subject.timeSlots)].flat(),
+              paymentDetails: {
+                classAmount: Number(subject.paymentDetails.classAmount) || 0,
+                amountPaid: Number(subject.paymentDetails.amountPaid) || 0,
+                lastPayments: Array.isArray(subject.paymentDetails.lastPayments) && subject.paymentDetails.lastPayments.length > 0
+                  ? subject.paymentDetails.lastPayments.map(payment => ({
+                      paymentId: String(payment.paymentId || ''),
+                      date: new Date(payment.date || Date.now()),
+                      amount: Number(payment.amount) || 0
+                    }))
+                  : []
+              },
+              remarks: [...(Array.isArray(subject.remarks) ? subject.remarks.map(String) : []), 'Failed to create Zoom meeting']
+            };
+          }
+        })
+      );
+
+      // Submit each subject individually
+      for (const subject of subjectsWithMeetings) {
+        console.log('Submitting subject:', JSON.stringify(subject, null, 2));
         
-        for (const subject of subjects) {
-          let formattedTimeSlots: string[] = [];
-
-          if (Array.isArray(subject.timeSlots)) {
-            formattedTimeSlots = subject.timeSlots
-              .map((slot: string) => typeof slot === 'string' ? slot.trim() : String(slot))
-              .filter((slot: string) => slot !== '');
-          } else if (typeof subject.timeSlots === 'string') {
-            formattedTimeSlots = subject.timeSlots
-              .split(',')
-              .map((slot: string) => slot.trim())
-              .filter((slot: string) => slot !== '');
-          }
-
-          const subjectData = {
-            student: studentId,
-            board: subject.board,
-            class: subject.class,
-            subject: subject.subject,
-            numberOfClassesPerWeek: subject.numberOfClassesPerWeek,
-            teacher: subject.teacher,
-            timeSlots: formattedTimeSlots,
-            paymentDetails: {
-              classAmount: subject.paymentDetails.classAmount,
-              amountPaid: subject.paymentDetails.amountPaid || 0,
-              lastPayments: []
-            },
-            remarks: []
-          };
-
-          console.log('Sending subject data:', subjectData);
-
-          const subjectResponse = await fetch(`${baseUrl}/api/subject/add`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(subjectData),
-          });
-
-          if (!subjectResponse.ok) {
-            const errorData = await subjectResponse.json();
-            throw new Error(errorData.error || `Failed to save subject: ${subjectResponse.statusText}`);
-          }
-
-          const subjectResponseData = await subjectResponse.json();
-          console.log('Subject save response:', subjectResponseData);
-        }
-
-        console.log('All subjects saved successfully');
-      } catch (error) {
-        console.error('Error handling subjects:', error);
-      }
-
-      try {
-        const leadUpdateResponse = await fetch(`${baseUrl}/api/leads/editlead/${lead._id}`, {
-          method: 'PUT',
+        const subjectsResponse = await fetch(`${baseUrl}/api/subject/add`, {
+          method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ status: 'converted' }),
+          body: JSON.stringify(subject),
         });
 
-        if (!leadUpdateResponse.ok) {
-          console.error('Failed to update lead status');
+        const subjectsResponseData = await subjectsResponse.json();
+        console.log('Subject response:', subjectsResponseData);
+
+        if (!subjectsResponse.ok) {
+          console.error('Subject validation error:', subjectsResponseData);
+          throw new Error(subjectsResponseData.message || subjectsResponseData.error || 'Failed to create subject with meeting details');
         }
-      } catch (error) {
-        console.error('Error updating lead status:', error);
       }
 
-      alert(`Student ${isEditing ? 'updated' : 'enrolled'} successfully!`);
       onComplete();
-      return;
     } catch (error) {
       console.error('Error in handleSubmit:', error);
       setError(error instanceof Error ? error.message : 'An error occurred');

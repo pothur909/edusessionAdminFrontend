@@ -183,7 +183,7 @@ export default function LeadsList() {
     fetchEnrolledStudents(); // Add this line to fetch enrolled students on component mount
   }, [activeTab]);
 
-  const baseUrl =process.env. BASE_URL;
+  const baseUrl =process.env.BASE_URL;
 
   // const fetchLeads = async () => {
   //   try {
@@ -319,7 +319,7 @@ export default function LeadsList() {
   const fetchTeachers = async (board: string, className: string, subject: string) => {
     try {
       setIsLoadingTeachers(true);
-      const response = await fetch('http://localhost:6969/api/fetchTeacherByCardId', {
+      const response = await fetch(`${baseUrl}/api/fetchTeacherByCardId`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -667,7 +667,7 @@ export default function LeadsList() {
             </div>
           ) : (
             <div className="mb-6">
-              <h3 className="text-lg font-semibold mb-2">Available Teachers</h3>
+              {/* <h3 className="text-lg font-semibold mb-2">Available Teachers</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {teachers.map((teacher) => (
                   <div
@@ -696,7 +696,7 @@ export default function LeadsList() {
                     </div>
                   </div>
                 ))}
-              </div>
+              </div> */}
             </div>
           )}
           <DemoLeadForm
@@ -747,7 +747,7 @@ export default function LeadsList() {
             </div>
           ) : (
             <div className="mb-6">
-              <h3 className="text-lg font-semibold mb-2">Available Teachers</h3>
+              {/* <h3 className="text-lg font-semibold mb-2">Available Teachers</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {teachers.map((teacher) => (
                   <div
@@ -776,7 +776,7 @@ export default function LeadsList() {
                     </div>
                   </div>
                 ))}
-              </div>
+              </div> */}
             </div>
           )}
           <EnrollmentForm
