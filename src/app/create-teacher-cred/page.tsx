@@ -202,7 +202,7 @@ const AdminTeacherDashboard = () => {
         <div className="bg-white rounded-lg shadow-sm border p-6 mb-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <div className="bg-blue-100 p-2 rounded-lg">
+              <div className="bga-blue-100 p-2 rounded-lg">
                 <Users className="w-6 h-6 text-blue-600" />
               </div>
               <div>
@@ -338,18 +338,34 @@ const AdminTeacherDashboard = () => {
                   {selectedCards.map(cardId => {
                     const card = searchCards.find(c => c._id === cardId);
                     return card ? (
-                      <span key={cardId} className="inline-flex items-center gap-1 bg-green-100 text-green-800 text-xs font-medium px-2 py-1 rounded">
-                        {getCardTitle(card)}
+                  <div key={cardId} className="flex items-center gap-2 bg-white border border-green-200 rounded px-3 py-2">
+                        <span className="text-sm font-medium text-gray-900">
+                          {getCardTitle(card)}
+                        </span>
+                        <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${
+                          card.type === 1 
+                            ? 'bg-blue-100 text-blue-800'
+                            : 'bg-purple-100 text-purple-800'
+                        }`}>
+                          {getCardTypeLabel(card.type)}
+                        </span>
+                        <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${
+                          card.classType === 'special'
+                            ? 'bg-pink-100 text-pink-800'
+                            : 'bg-gray-100 text-gray-800'
+                        }`}>
+                          {card.classType === 'special' ? 'Special' : 'Normal'}
+                        </span>
                         <button
                           onClick={() => handleCardSelection(cardId)}
-                          className="text-green-600 hover:text-green-800 ml-1"
+                          className="text-red-500 hover:text-red-700"
                         >
-                          <X className="w-3 h-3" />
+                          <X className="w-4 h-4" />
                         </button>
-                      </span>
+                      </div>
                     ) : null;
                   })}
-                </div>
+                  </div>
               </div>
             )}
             

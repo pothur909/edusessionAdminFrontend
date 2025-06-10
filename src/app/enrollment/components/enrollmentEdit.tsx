@@ -52,7 +52,7 @@ export default function EditEnrollmentForm({ studentId, onComplete, onCancel }: 
   const [fetchingData, setFetchingData] = useState(true);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const baseUrl =process.env. BASE_URL;
+  const baseUrl = process.env.BASE_URL;
   const [formData, setFormData] = useState<Enrollment>({
     _id: '',
     lead: '',
@@ -516,10 +516,10 @@ export default function EditEnrollmentForm({ studentId, onComplete, onCancel }: 
 
   return (
     <div className="max-w-4xl mx-auto p-6 text-black">
-      <h2 className="text-2xl font-bold mb-4">
+      {/* <h2 className="text-2xl font-bold mb-4">
         Edit Student Enrollment
         <span className="text-sm text-blue-600 ml-2">(Student ID: {studentId})</span>
-      </h2>
+      </h2> */}
 
       <form onSubmit={handleSubmit} className="space-y-6 text-black">
         {/* Student Details Section */}

@@ -103,7 +103,7 @@ export default function AnalyticsDashboard() {
   const years = Array.from({ length: 10 }, (_, i) => currentYear - i);
 
   // Base API URL - update this to match your backend
-  const baseUrl =process.env. BASE_URL ;
+  const baseUrl = process.env.BASE_URL ;
 
   useEffect(() => {
     fetchDashboardData();

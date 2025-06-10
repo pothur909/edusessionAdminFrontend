@@ -25,6 +25,10 @@ import {
   Tab,
   TextField,
   Grid,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import VisibilityIcon from '@mui/icons-material/Visibility';
@@ -35,6 +39,9 @@ import AddIcon from '@mui/icons-material/Add';
 import InfoIcon from '@mui/icons-material/Info';
 import TeacherForm from '../addTeachers/page';
 import { useRouter } from 'next/navigation';
+import { useFilter } from '@/context/FilterContext';
+import { FilterPanel } from '@/app/components/FilterPanel';
+import { exportToExcel } from '@/utils/excelExport';
 
 interface InterviewDetails {
   name: string;
@@ -66,6 +73,9 @@ interface Teacher {
   status: 'new' | 'interview' | 'interviewdone' | 'contacted' | 'appointed' | 'rejected' | 'rejectafterinterview';
   createdAt: string;
   updatedAt: string;
+  languages?: string[];
+  additionalCourse?: string[];
+  expectedSalary: string;
   interviewDetails?: InterviewDetails;
 }
 
@@ -134,22 +144,165 @@ const TeachersListShow = () => {
   });
   const [openAppointDialog, setOpenAppointDialog] = useState(false);
   const [teacherToAppoint, setTeacherToAppoint] = useState<Teacher | null>(null);
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [openInterviewDetailsDialog, setOpenInterviewDetailsDialog] = useState(false);
   const [selectedInterviewDetails, setSelectedInterviewDetails] = useState<InterviewDetails | null>(null);
 
-  const baseUrl =process.env. BASE_URL||"http://localhost:6969";
+  const baseUrl = process.env.BASE_URL || "http://localhost:6969";
+
+  const {
+    filterState,
+    setSearchQuery,
+    setDateRange,
+    setMonthFilter,
+    setYearFilter,
+    setBoardFilter,
+    setClassFilter,
+    setSubjectFilter,
+    setStatusFilter,
+    setQuickMonthSelection,
+    setCurrentPage,
+    clearAllFilters,
+    hasActiveFilters,
+  } = useFilter();
+
+  // Get unique values for filters
+  const uniqueBoards = [...new Set(teachers.flatMap(teacher => teacher.board).filter(Boolean))];
+  const uniqueClasses = [...new Set(teachers.flatMap(teacher => teacher.classes).filter(Boolean))];
+  const uniqueSubjects = [...new Set(teachers.flatMap(teacher => teacher.subjects).filter(Boolean))];
+  const uniqueQualifications = [...new Set(teachers.map(teacher => teacher.qualification).filter(Boolean))];
+  
+  // Experience ranges for filtering
+  const experienceRanges = [
+    { value: 'all', label: 'All Experience' },
+    { value: '0-1', label: '0-1 years' },
+    { value: '1-3', label: '1-3 years' },
+    { value: '3-5', label: '3-5 years' },
+    { value: '5-10', label: '5-10 years' },
+    { value: '10+', label: '10+ years' }
+  ];
+
+  // Add new filter state
+  const [qualificationFilter, setQualificationFilter] = useState('all');
+  const [experienceFilter, setExperienceFilter] = useState('all');
+
+  const handleExportExcel = () => {
+    const columns = [
+      { key: 'name', label: 'Name' },
+      { key: 'phoneNumber', label: 'Phone Number' },
+      { key: 'email', label: 'Email' },
+      { key: 'board', label: 'Boards' },
+      { key: 'classes', label: 'Classes' },
+      { key: 'subjects', label: 'Subjects' },
+      { key: 'experience', label: 'Experience' },
+      { key: 'qualification', label: 'Qualification' },
+      { key: 'status', label: 'Status' },
+      { key: 'createdAt', label: 'Created At' }
+    ];
+
+    const data = filteredTeachers.map(teacher => ({
+      name: teacher.name,
+      phoneNumber: teacher.phoneNumber,
+      email: teacher.email,
+      board: teacher.board.join(', '),
+      classes: teacher.classes.join(', '),
+      subjects: teacher.subjects.join(', '),
+      experience: teacher.experience,
+      qualification: teacher.qualification,
+      status: teacher.status,
+      expectedSalary: teacher.expectedSalary,
+      createdAt: new Date(teacher.createdAt).toLocaleDateString()
+    }));
+
+    exportToExcel(data, columns, {
+      filename: 'teachers.xlsx',
+      sheetName: 'Teachers'
+    });
+  };
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setSelectedTab(newValue);
+    // Update status filter based on selected tab
+    const selectedStatus = statusTabs[newValue].value;
+    setStatusFilter(selectedStatus);
+  };
+
+  const handleApplyFilters = (filters: { qualification: string; experience: string }) => {
+    setQualificationFilter(filters.qualification);
+    setExperienceFilter(filters.experience);
   };
 
   const filteredTeachers = teachers.filter(teacher => {
-    const selectedStatus = statusTabs[selectedTab].value;
-    if (selectedStatus === 'all') return true;
-    if (selectedStatus === 'rejected') {
-      return teacher.status === 'rejected' || teacher.status === 'rejectafterinterview';
+    const searchLower = filterState.searchQuery.toLowerCase();
+    const name = teacher.name?.toLowerCase() || '';
+    const email = teacher.email?.toLowerCase() || '';
+    const phoneNumber = teacher.phoneNumber || '';
+    const qualification = teacher.qualification?.toLowerCase() || '';
+
+    const matchesSearch =
+      name.includes(searchLower) ||
+      email.includes(searchLower) ||
+      phoneNumber.includes(filterState.searchQuery) ||
+      qualification.includes(searchLower);
+
+    // Update status matching logic to handle 'rejected' tab
+    const matchesStatus = selectedTab === 0 || // 'All' tab
+      (selectedTab === 6 ? // 'Rejected' tab
+        (teacher.status === 'rejected' || teacher.status === 'rejectafterinterview') :
+        teacher.status === statusTabs[selectedTab].value);
+
+    const matchesBoard = filterState.boardFilter === 'all' || teacher.board.includes(filterState.boardFilter);
+    const matchesClass = filterState.classFilter === 'all' || teacher.classes.includes(filterState.classFilter);
+    const matchesSubject = filterState.subjectFilter === 'all' || teacher.subjects.includes(filterState.subjectFilter);
+    const matchesQualification = qualificationFilter === 'all' || teacher.qualification === qualificationFilter;
+
+    // Experience filtering logic
+    let matchesExperience = true;
+    if (experienceFilter !== 'all') {
+      const expYears = parseInt(teacher.experience) || 0;
+      switch (experienceFilter) {
+        case '0-1':
+          matchesExperience = expYears >= 0 && expYears < 1;
+          break;
+        case '1-3':
+          matchesExperience = expYears >= 1 && expYears < 3;
+          break;
+        case '3-5':
+          matchesExperience = expYears >= 3 && expYears < 5;
+          break;
+        case '5-10':
+          matchesExperience = expYears >= 5 && expYears < 10;
+          break;
+        case '10+':
+          matchesExperience = expYears >= 10;
+          break;
+      }
     }
-    return teacher.status === selectedStatus;
+
+    const teacherDate = new Date(teacher.createdAt);
+    const matchesDateRange = (
+      !filterState.dateRange.startDate || teacherDate >= new Date(filterState.dateRange.startDate) &&
+      (!filterState.dateRange.endDate || teacherDate <= new Date(filterState.dateRange.endDate + "T23:59:59"))
+    );
+
+    const teacherMonth = teacherDate.getMonth() + 1;
+    const matchesMonth = filterState.monthFilter === "all" || teacherMonth.toString() === filterState.monthFilter;
+
+    const teacherYear = teacherDate.getFullYear();
+    const matchesYear = filterState.yearFilter === "all" || teacherYear.toString() === filterState.yearFilter;
+
+    return (
+      matchesSearch &&
+      matchesStatus &&
+      matchesBoard &&
+      matchesClass &&
+      matchesSubject &&
+      matchesQualification &&
+      matchesExperience &&
+      matchesDateRange &&
+      matchesMonth &&
+      matchesYear
+    );
   });
 
   const fetchTeachers = async () => {
@@ -448,16 +601,66 @@ const TeachersListShow = () => {
         <Typography variant="h4" style={{ color: 'black' }}>
           Teachers Application List
         </Typography>
-        <Button
-          variant="contained"
-          color="primary"
-          startIcon={<AddIcon />}
-          onClick={() => router.push('/teachers/addTeachers')}
-        >
-          Add Teacher
-        </Button>
+        <Box sx={{ display: 'flex', gap: 2 }}>
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={handleExportExcel}
+          >
+            Download Data
+          </Button>
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<AddIcon />}
+            onClick={() => router.push('/teachers/addTeachers')}
+          >
+            Add Teacher
+          </Button>
+        </Box>
       </Box>
 
+      {/* Filter Panel */}
+      <FilterPanel
+        showAdvancedFilters={showAdvancedFilters}
+        setShowAdvancedFilters={setShowAdvancedFilters}
+        months={[
+          { value: 'all', label: 'All Months' },
+          { value: '1', label: 'January' },
+          { value: '2', label: 'February' },
+          { value: '3', label: 'March' },
+          { value: '4', label: 'April' },
+          { value: '5', label: 'May' },
+          { value: '6', label: 'June' },
+          { value: '7', label: 'July' },
+          { value: '8', label: 'August' },
+          { value: '9', label: 'September' },
+          { value: '10', label: 'October' },
+          { value: '11', label: 'November' },
+          { value: '12', label: 'December' }
+        ]}
+        uniqueBoards={uniqueBoards}
+        uniqueClasses={uniqueClasses}
+        uniqueSubjects={uniqueSubjects}
+        statusOptions={[
+          { value: 'all', label: 'All Status' },
+          { value: 'new', label: 'New' },
+          { value: 'interview', label: 'Interview' },
+          { value: 'interviewdone', label: 'Interview Done' },
+          { value: 'contacted', label: 'Contacted' },
+          { value: 'appointed', label: 'Appointed' },
+          { value: 'rejected', label: 'Rejected' },
+          { value: 'rejectafterinterview', label: 'Rejected After Interview' }
+        ]}
+        qualificationOptions={[
+          { value: 'all', label: 'All Qualifications' },
+          ...uniqueQualifications.map(qual => ({ value: qual, label: qual }))
+        ]}
+        experienceOptions={experienceRanges}
+        onApplyFilters={handleApplyFilters}
+      />
+
+      {/* Status Tabs */}
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
         <Tabs 
           value={selectedTab} 
@@ -502,6 +705,7 @@ const TeachersListShow = () => {
               <TableCell>Classes</TableCell>
               <TableCell>Subjects</TableCell>
               <TableCell>Experience</TableCell>
+              <TableCell>Expected Salary</TableCell>
               <TableCell>Qualification</TableCell>
               <TableCell>Status</TableCell>
               <TableCell>Actions</TableCell>
@@ -546,6 +750,7 @@ const TeachersListShow = () => {
                   ))}
                 </TableCell>
                 <TableCell>{teacher.experience}</TableCell>
+                <TableCell>{teacher.expectedSalary}</TableCell>
                 <TableCell>{teacher.qualification}</TableCell>
                 <TableCell>
                   <Chip
@@ -647,6 +852,9 @@ const TeachersListShow = () => {
                 board: selectedTeacher.board,
                 classes: selectedTeacher.classes,
                 subjects: selectedTeacher.subjects,
+                languages: selectedTeacher.languages || [],
+                additionalCourse: selectedTeacher.additionalCourse || [],
+                expectedSalary : selectedTeacher.expectedSalary,
                 experience: selectedTeacher.experience,
                 qualification: selectedTeacher.qualification,
                 note: selectedTeacher.note,
@@ -870,16 +1078,88 @@ const TeachersListShow = () => {
               <Typography variant="h6" sx={{ mt: 3, mb: 2 }}>Zoom Meeting Details</Typography>
               <Grid container spacing={2}>
                 <Grid item xs={12}>
-                  <Typography variant="subtitle2">Meeting Join Link</Typography>
-                  <Typography variant="body1" sx={{ wordBreak: 'break-all' }}>
-                    {selectedInterviewDetails.meetingJoinUrl}
-                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Typography variant="subtitle2" sx={{ minWidth: '150px' }}>Meeting Join Link</Typography>
+                    <Box sx={{ 
+                      flex: 1, 
+                      p: 1, 
+                      bgcolor: 'grey.100', 
+                      borderRadius: 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1,
+                      maxWidth: '100%'
+                    }}>
+                      <Typography 
+                        variant="body2" 
+                        sx={{ 
+                          flex: 1,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          maxWidth: 'calc(100% - 80px)'
+                        }}
+                      >
+                        {selectedInterviewDetails.meetingJoinUrl.split('/').pop() || 'Join Link'}
+                      </Typography>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => {
+                          navigator.clipboard.writeText(selectedInterviewDetails.meetingJoinUrl);
+                          setSnackbar({
+                            open: true,
+                            message: 'Join link copied to clipboard!',
+                            severity: 'success'
+                          });
+                        }}
+                      >
+                        Copy
+                      </Button>
+                    </Box>
+                  </Box>
                 </Grid>
                 <Grid item xs={12}>
-                  <Typography variant="subtitle2">Meeting Start Link (Host Only)</Typography>
-                  <Typography variant="body1" sx={{ wordBreak: 'break-all' }}>
-                    {selectedInterviewDetails.meetingStartUrl}
-                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Typography variant="subtitle2" sx={{ minWidth: '150px' }}>Meeting Start Link</Typography>
+                    <Box sx={{ 
+                      flex: 1, 
+                      p: 1, 
+                      bgcolor: 'grey.100', 
+                      borderRadius: 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1,
+                      maxWidth: '100%'
+                    }}>
+                      <Typography 
+                        variant="body2" 
+                        sx={{ 
+                          flex: 1,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          maxWidth: 'calc(100% - 80px)'
+                        }}
+                      >
+                        {selectedInterviewDetails.meetingStartUrl.split('/').pop() || 'Start Link'}
+                      </Typography>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => {
+                          navigator.clipboard.writeText(selectedInterviewDetails.meetingStartUrl);
+                          setSnackbar({
+                            open: true,
+                            message: 'Start link copied to clipboard!',
+                            severity: 'success'
+                          });
+                        }}
+                      >
+                        Copy
+                      </Button>
+                    </Box>
+                  </Box>
                 </Grid>
               </Grid>
             </Box>

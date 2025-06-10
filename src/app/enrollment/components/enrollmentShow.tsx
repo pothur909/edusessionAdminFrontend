@@ -3,24 +3,36 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import EditEnrollmentForm from './enrollmentEdit';
+import DemoLeadForm from '../../demo/components/demoForm';
+import { Search, Filter, X, Calendar } from 'lucide-react';
+import * as XLSX from 'xlsx';
+import { FilterPanel } from '@/app/components/FilterPanel';
+import { useFilter } from '@/context/FilterContext';
+import { exportToExcel } from '@/utils/excelExport';
 
 interface Enrollment {
   _id: string;
   studentName: string;
-  phoneNumber: string;
-  parentsPhoneNumbers: string[];
+  studentPhone: string;
+  parentPhone: string;
   email: string;
-  age: number;
-  city: string;
-  address: string;
+  board: string;
+  class: string;
+  status: 'active' | 'inactive' | 'graduated' | 'dropped';
   counsellor: string;
-  studentUsername: string;
-  password: string;
-  studentRating: number;
+  city: string;
+  studentId: string;
+  leadId: string;
+  lead?: any;
   createdAt: string;
   updatedAt: string;
-  status?: 'active' | 'inactive' | 'graduated' | 'dropped';
-  subjects?: {
+  age?: number;
+  phoneNumber?: string;
+  parentsPhoneNumbers?: string[];
+  address?: string;
+  studentUsername?: string;
+  studentRating?: number;
+  subjects: {
     _id?: string;
     student: string;
     board: string;
@@ -39,6 +51,11 @@ interface Enrollment {
       }[];
     };
     remarks: string[];
+    meetingDetails?: {
+      meetingId: string;
+      password: string;
+      joinUrl: string;
+    };
   }[];
 }
 
@@ -48,34 +65,161 @@ interface EnrollmentResponse {
   data?: Enrollment[];
 }
 
+interface Demo {
+  _id: string;
+  lead: string;
+  date: string;
+  time: string;
+  teacher: string;
+  board: string;
+  class: string;
+  subject: string;
+  status: string;
+  remarks: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface Teacher {
+  _id: string;
+  name: string;
+  email: string;
+  phoneNumber: string;
+  board: string;
+  classes: string[];
+  subjects: string[];
+  isAvailable: boolean;
+  isLocked: boolean;
+}
+
+interface DemoCount {
+  count: number;
+  demos: Demo[];
+}
+
+interface FilterState {
+  searchQuery: string;
+  statusFilter: string;
+  dateRange: {
+    startDate: string;
+    endDate: string;
+  };
+  monthFilter: string;
+  yearFilter: string;
+  boardFilter: string;
+  classFilter: string;
+  subjectFilter: string;
+}
+
+interface Lead {
+  _id: string;
+  studentName: string;
+  studentPhone: string;
+  parentPhone: string;
+  email: string;
+  board: string;
+  class: string;
+  subjects: string[];
+  status: string;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+  leadSource: string;
+  classesPerWeek: number;
+  courseInterested: string;
+  modeOfContact: string;
+  preferredTimeSlots: string;
+  counsellor: string;
+  sessionEndDate: string;
+  remarks: string;
+  city: string;
+}
+
 export default function EnrollmentList() {
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'all' | 'active' | 'inactive' | 'graduated' | 'dropped'>('all');
-  // const [deleteLoading, setDeleteLoading] = useState<string | null>(null);
-  const [editingEnrollment, setEditingEnrollment] = useState<Enrollment | null>(null);
-  const [showEditForm, setShowEditForm] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState<string | null>(null);
   const [selectedEnrollment, setSelectedEnrollment] = useState<Enrollment | null>(null);
+  const [showEditForm, setShowEditForm] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
-  const baseUrl =process.env. BASE_URL;
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [showDemoForm, setShowDemoForm] = useState(false);
+  const [selectedEnrollmentForDemo, setSelectedEnrollmentForDemo] = useState<Enrollment | null>(null);
+  const [teachers, setTeachers] = useState<Teacher[]>([]);
+  const [demoCounts, setDemoCounts] = useState<Record<string, number>>({});
+  const [dateRange, setDateRange] = useState<{ start: string; end: string }>({
+    start: new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0],
+    end: new Date().toISOString().split('T')[0]
+  });
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [boardFilter, setBoardFilter] = useState<string>("all");
+  const [classFilter, setClassFilter] = useState<string>("all");
+  const [subjectFilter, setSubjectFilter] = useState<string>("all");
+  const [monthFilter, setMonthFilter] = useState<string>("all");
+  const [yearFilter, setYearFilter] = useState<string>("all");
 
-  // Pagination states
+  const baseUrl = process.env.BASE_URL;
+
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
-  const router = useRouter();
+
+  const {
+    filterState,
+    setSearchQuery: setFilterSearchQuery,
+    setDateRange: setFilterDateRange,
+    setMonthFilter: setFilterMonthFilter,
+    setYearFilter: setFilterYearFilter,
+    setBoardFilter: setFilterBoardFilter,
+    setClassFilter: setFilterClassFilter,
+    setSubjectFilter: setFilterSubjectFilter,
+    setStatusFilter,
+    setQuickMonthSelection: setFilterQuickMonthSelection,
+    setCurrentPage: setFilterCurrentPage,
+    clearAllFilters: clearFilterAllFilters,
+    hasActiveFilters: filterHasActiveFilters,
+  } = useFilter();
 
   useEffect(() => {
     fetchEnrollments();
-  }, [activeTab]);
+  }, [filterState.statusFilter]);
+
+  const fetchDemoCounts = async (leadIds: string[]) => {
+    try {
+      // First check if we have any lead IDs
+      if (!leadIds.length) return;
+
+      // Create a map to store demo counts
+      const demoCountMap: Record<string, number> = {};
+      
+      // Fetch demos for each lead ID
+      for (const leadId of leadIds) {
+        try {
+          const response = await fetch(`${baseUrl}/api/demo/view/${leadId}`);
+          if (!response.ok) continue;
+          
+          const data = await response.json();
+          if (data.success && data.demos) {
+            demoCountMap[leadId] = data.demos.length;
+          }
+        } catch (error) {
+          console.error(`Error fetching demos for lead ${leadId}:`, error);
+        }
+      }
+      
+      setDemoCounts(demoCountMap);
+    } catch (error) {
+      console.error('Error fetching demo counts:', error);
+    }
+  };
 
   const fetchEnrollments = async () => {
     try {
       setIsLoading(true);
       setError(null);
       
-      const url = `${baseUrl}/api/students${activeTab !== 'all' ? `?status=${activeTab}` : ''}`;
+      const url = `${baseUrl}/api/students${filterState.statusFilter !== 'all' ? `?status=${filterState.statusFilter}` : ''}`;
       console.log('Fetching enrollments from:', url);
       
       const response = await fetch(url);
@@ -89,16 +233,23 @@ export default function EnrollmentList() {
       }
     
       const dataEnroll = await response.json();
-      console.log('Response data:', dataEnroll);
-      
+      console.log('Fetched enrollments data:', dataEnroll);
       
       // Handle both array response and success/message/data structure
+      let enrollmentsData: Enrollment[] = [];
       if (Array.isArray(dataEnroll)) {
-        setEnrollments(dataEnroll);
+        enrollmentsData = dataEnroll;
       } else if (dataEnroll.success && dataEnroll.data) {
-        setEnrollments(dataEnroll.data);
-      } else {
-        setEnrollments([]);
+        enrollmentsData = dataEnroll.data;
+      }
+      
+      console.log('Processed enrollments data:', enrollmentsData);
+      setEnrollments(enrollmentsData);
+      
+      // Fetch demo counts for all leads
+      const leadIds = enrollmentsData.map(e => e.lead).filter(Boolean);
+      if (leadIds.length > 0) {
+        await fetchDemoCounts(leadIds);
       }
     } catch (error) {
       console.error('Error fetching enrollments:', error);
@@ -108,95 +259,248 @@ export default function EnrollmentList() {
     }
   };
 
-  // const handleDeleteEnrollment = async (enrollmentId: string) => {
-  //   if (!confirm('Are you sure you want to delete this enrollment? This action cannot be undone.')) {
-  //     return;
-  //   }
+  const handleDelete = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this enrollment? This action cannot be undone.')) {
+      return;
+    }
 
-  //   try {
-  //     setDeleteLoading(enrollmentId);
-  //     const response = await fetch(`${baseUrl}/api/students/${enrollmentId}`, {
-  //       method: 'DELETE',
-  //     });
+    setDeleteLoading(id);
+    try {
+      const response = await fetch(`${baseUrl}/api/students/${id}`, {
+        method: 'DELETE',
+      });
 
-  //     const data = await response.json();
-  //     if (data.success) {
-  //       setEnrollments(prevEnrollments => prevEnrollments.filter(enrollment => enrollment._id !== enrollmentId));
-  //       alert('Enrollment deleted successfully');
-  //     } else {
-  //       alert(data.message || 'Failed to delete enrollment');
-  //     }
-  //   } catch (error) {
-  //     console.error('Error deleting enrollment:', error);
-  //     alert('An error occurred while deleting the enrollment');
-  //   } finally {
-  //     setDeleteLoading(null);
-  //   }
-  // };
-
-  const handleEditClick = (enrollment: Enrollment) => {
-    setEditingEnrollment(enrollment);
-    setShowEditForm(true);
+      const data = await response.json();
+      if (data.success) {
+        setEnrollments(prevEnrollments => prevEnrollments.filter(enrollment => enrollment._id !== id));
+        alert('Enrollment deleted successfully');
+      } else {
+        alert(data.message || 'Failed to delete enrollment');
+      }
+    } catch (error) {
+      console.error('Error deleting enrollment:', error);
+      alert('An error occurred while deleting the enrollment');
+    } finally {
+      setDeleteLoading(null);
+    }
   };
 
-  const handleEditComplete = () => {
-    setEditingEnrollment(null);
+  const handleEditClick = async (enrollment: Enrollment) => {
+    console.log('Edit Click - Full enrollment:', enrollment);
+    console.log('Edit Click - Subjects:', enrollment.subjects);
+    // Navigate to the edit page
+    window.location.href = `/enrollment/edit/${enrollment._id}`;
+  };
+
+  const handleEditComplete = async () => {
+    await fetchEnrollments();
     setShowEditForm(false);
-    fetchEnrollments();
+    setSelectedEnrollment(null);
   };
 
   const handleEditCancel = () => {
-    setEditingEnrollment(null);
     setShowEditForm(false);
+    setSelectedEnrollment(null);
+  };
+
+  // Demo form handlers
+  const handleBookDemoClick = async (enrollment: Enrollment) => {
+    try {
+      setIsLoading(true);
+      setSelectedEnrollmentForDemo(enrollment);
+      
+      // Fetch teachers for the demo - use the first subject if available
+      const subject = enrollment.subjects?.[0] || '';
+      const teachersResponse = await fetch(`${baseUrl}/api/teachers?board=${enrollment.board}&class=${enrollment.class}&subject=${subject}`);
+      const teachersData = await teachersResponse.json();
+      
+      if (teachersData.success && teachersData.teachers) {
+        setTeachers(teachersData.teachers);
+      }
+      
+      // Create a lead object from enrollment data
+      const leadData: Lead = {
+        _id: enrollment.leadId || enrollment._id,
+        studentName: enrollment.studentName,
+        studentPhone: enrollment.studentPhone,
+        parentPhone: enrollment.parentPhone,
+        email: enrollment.email,
+        board: enrollment.board,
+        class: enrollment.class,
+        subjects: enrollment.subjects || [],
+        status: 'enrolled',
+        notes: '',
+        createdAt: enrollment.createdAt,
+        updatedAt: enrollment.updatedAt,
+        leadSource: '',
+        classesPerWeek: 0,
+        courseInterested: '',
+        modeOfContact: '',
+        preferredTimeSlots: '',
+        counsellor: enrollment.counsellor,
+        sessionEndDate: '',
+        remarks: '',
+        city: enrollment.city || ''
+      };
+      
+      setSelectedEnrollmentForDemo({
+        ...enrollment,
+        lead: leadData
+      });
+      setShowDemoForm(true);
+    } catch (error) {
+      console.error('Error preparing demo form:', error);
+      alert('Failed to prepare demo form. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDemoComplete = () => {
+    setSelectedEnrollmentForDemo(null);
+    setShowDemoForm(false);
+    // Optionally refresh enrollments if needed
+    // fetchEnrollments();
+  };
+
+  const handleDemoCancel = () => {
+    setSelectedEnrollmentForDemo(null);
+    setShowDemoForm(false);
   };
 
   const handleViewClick = async (enrollment: Enrollment) => {
     try {
-      console.log('Fetching details for enrollment:', enrollment._id);
-      // Fetch complete enrollment details including subjects
-      const response = await fetch(`${baseUrl}/api/students/${enrollment._id}`);
-      console.log('Response status:', response.status);
-      
+      // Fetch subjects for this student
+      const response = await fetch(`${baseUrl}/api/subject/student/${enrollment._id}`);
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Error response:', errorText);
-        throw new Error(`Failed to fetch enrollment details: ${response.status} ${errorText}`);
+        throw new Error('Failed to fetch subjects');
       }
       
       const data = await response.json();
-      console.log('Fetched enrollment data:', data);
+      console.log('Fetched subjects data:', data);
       
-      if (!data.data) {
-        throw new Error('No data received from the server');
-      }
+      // Create a new enrollment object with the fetched subjects
+      const enrollmentWithSubjects = {
+        ...enrollment,
+        subjects: data.data || []
+      };
       
-      setSelectedEnrollment(data.data);
+      setSelectedEnrollment(enrollmentWithSubjects);
       setShowViewModal(true);
     } catch (error) {
-      console.error('Error in handleViewClick:', error);
-      alert(error instanceof Error ? error.message : 'Failed to fetch enrollment details');
+      console.error('Error fetching subjects:', error);
+      // Fallback to the original enrollment data if fetch fails
+      setSelectedEnrollment(enrollment);
+      setShowViewModal(true);
     }
   };
 
-  const filteredEnrollments = enrollments.filter((enrollment) => {
-    const searchLower = searchQuery.toLowerCase();
+  const filteredEnrollments = enrollments.filter(enrollment => {
+    const searchLower = filterState.searchQuery.toLowerCase();
     const studentName = enrollment.studentName?.toLowerCase() || '';
-    const phoneNumber = enrollment.phoneNumber || '';
+    const phoneNumber = enrollment.studentPhone || '';
     const email = enrollment.email?.toLowerCase() || '';
-    const studentUsername = enrollment.studentUsername?.toLowerCase() || '';
 
-    const matchesSearch =
+    const matchesSearch = 
       studentName.includes(searchLower) ||
-      phoneNumber.includes(searchQuery) ||
-      email.includes(searchLower) ||
-      studentUsername.includes(searchLower) ||
-      enrollment.parentsPhoneNumbers.some(phone => phone.includes(searchQuery));
+      phoneNumber.includes(searchLower) ||
+      email.includes(searchLower);
 
-    const matchesTab = activeTab === 'all' || 
-      (enrollment.status?.toLowerCase() === activeTab.toLowerCase());
+    const matchesStatus = 
+      filterState.statusFilter === "all" ||
+      (enrollment.status?.toLowerCase() === filterState.statusFilter.toLowerCase());
 
-    return matchesSearch && matchesTab;
+    // Date Range filter
+    const enrollmentDate = new Date(enrollment.createdAt);
+    const matchesDateRange = (
+      !filterState.dateRange.startDate || 
+      enrollmentDate >= new Date(filterState.dateRange.startDate) && 
+      (!filterState.dateRange.endDate || enrollmentDate <= new Date(filterState.dateRange.endDate + "T23:59:59"))
+    );
+
+    // Month filter
+    const enrollmentMonth = enrollmentDate.getMonth() + 1;
+    const matchesMonth = filterState.monthFilter === "all" || enrollmentMonth.toString() === filterState.monthFilter;
+
+    // Year filter 
+    const enrollmentYear = enrollmentDate.getFullYear();
+    const matchesYear = filterState.yearFilter === "all" || enrollmentYear.toString() === filterState.yearFilter;
+
+    // Board filter
+    const matchesBoard = filterState.boardFilter === "all" || enrollment.board === filterState.boardFilter;
+    
+    // Class filter
+    const matchesClass = filterState.classFilter === "all" || enrollment.class === filterState.classFilter;
+
+    // Subject filter
+    const matchesSubject = filterState.subjectFilter === "all" || 
+      (enrollment.subjects && enrollment.subjects.includes(filterState.subjectFilter));
+
+    return (
+      matchesSearch &&
+      matchesStatus &&
+      matchesDateRange &&
+      matchesMonth &&
+      matchesYear &&
+      matchesBoard &&
+      matchesClass &&
+      matchesSubject
+    );
   });
+
+  const months = [
+    { value: 'all', label: 'All Months' },
+    { value: '1', label: 'January' },
+    { value: '2', label: 'February' },
+    { value: '3', label: 'March' },
+    { value: '4', label: 'April' },
+    { value: '5', label: 'May' },
+    { value: '6', label: 'June' },
+    { value: '7', label: 'July' },
+    { value: '8', label: 'August' },
+    { value: '9', label: 'September' },
+    { value: '10', label: 'October' },
+    { value: '11', label: 'November' },
+    { value: '12', label: 'December' }
+  ];
+
+  const clearAllFilters = () => {
+    setFilterSearchQuery('');
+    setFilterDateRange({ 
+      startDate: new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0], 
+      endDate: new Date().toISOString().split('T')[0] 
+    });
+    setFilterMonthFilter('all');
+    setFilterYearFilter('all');
+    setFilterBoardFilter('all');
+    setFilterClassFilter('all');
+    setFilterSubjectFilter('all');
+    setStatusFilter('all');
+    setShowAdvancedFilters(false);
+  };
+  
+  const resetFilters = () => {
+    clearAllFilters();
+    setShowAdvancedFilters(false);
+  };
+
+  const applyFilters = () => {
+    // Filters are applied in real-time, just close the panel
+    setShowAdvancedFilters(false);
+  };
+
+  const hasActiveFilters = () => {
+    return filterState.searchQuery || 
+           filterState.dateRange.startDate || 
+           filterState.dateRange.endDate || 
+           filterState.monthFilter !== 'all' || 
+           filterState.yearFilter !== 'all' || 
+           filterState.boardFilter !== 'all' || 
+           filterState.classFilter !== 'all' || 
+           filterState.subjectFilter !== 'all' || 
+           filterState.quickMonthSelection !== 'all' ||
+           filterState.statusFilter !== 'all';
+  };
 
   // Pagination logic
   const totalPages = Math.ceil(filteredEnrollments.length / itemsPerPage);
@@ -235,6 +539,40 @@ export default function EnrollmentList() {
     return stars;
   };
 
+  const handleExportExcel = () => {
+    const columns = [
+      { key: 'studentName', label: 'Student Name' },
+      { key: 'phoneNumber', label: 'Phone Number' },
+      { key: 'email', label: 'Email' },
+      { key: 'board', label: 'Board' },
+      { key: 'class', label: 'Class' },
+      { key: 'subjects', label: 'Subjects' },
+      { key: 'status', label: 'Status' },
+      { key: 'createdAt', label: 'Created At' }
+    ];
+
+    const data = filteredEnrollments.map(enrollment => ({
+      studentName: enrollment.studentName,
+      phoneNumber: enrollment.studentPhone,
+      email: enrollment.email,
+      board: enrollment.board,
+      class: enrollment.class,
+      subjects: enrollment.subjects.map(s => s.subject).join(', '),
+      status: enrollment.status,
+      createdAt: new Date(enrollment.createdAt).toLocaleDateString()
+    }));
+
+    exportToExcel(data, columns, {
+      filename: 'enrollments.xlsx',
+      sheetName: 'Enrollments'
+    });
+  };
+
+  // Get unique values for filters
+  const uniqueBoards = [...new Set(enrollments.map(enrollment => enrollment.board).filter(Boolean))];
+  const uniqueClasses = [...new Set(enrollments.map(enrollment => enrollment.class).filter(Boolean))];
+  const uniqueSubjects = [...new Set(enrollments.flatMap(enrollment => enrollment.subjects).filter(Boolean))];
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
@@ -253,8 +591,95 @@ export default function EnrollmentList() {
 
   return (
     <div className="space-y-6 text-black m-9">
-      {/* Edit Form - You would need to create an EditEnrollmentForm component */}
-      {showEditForm && editingEnrollment ? (
+      {!showEditForm && !showDemoForm && (
+        <div className="flex justify-between items-center">
+          <h1 className="text-2xl font-bold">Enrollments</h1>
+          <button
+            onClick={handleExportExcel}
+            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+          >
+            Download Data
+          </button>
+        </div>
+      )}
+
+      {/* Filter Panel */}
+      {!showEditForm && !showDemoForm && (
+        <FilterPanel
+          showAdvancedFilters={showAdvancedFilters}
+          setShowAdvancedFilters={setShowAdvancedFilters}
+          months={months}
+          uniqueBoards={uniqueBoards}
+          uniqueClasses={uniqueClasses}
+          uniqueSubjects={uniqueSubjects}
+          statusOptions={[
+            { value: 'all', label: 'All Status' },
+            { value: 'active', label: 'Active' },
+            { value: 'inactive', label: 'Inactive' },
+            { value: 'graduated', label: 'Graduated' },
+            { value: 'dropped', label: 'Dropped' }
+          ]}
+          onApplyFilters={() => setShowAdvancedFilters(false)}
+        />
+      )}
+
+      {/* Status Tabs */}
+      {!showEditForm && !showDemoForm && (
+        <div className="border-b border-gray-200">
+          <nav className="-mb-px flex space-x-8">
+            {[
+              { key: 'all', label: 'All Students' },
+              { key: 'active', label: 'Active' },
+              { key: 'inactive', label: 'Inactive' },
+              { key: 'graduated', label: 'Graduated' },
+              { key: 'dropped', label: 'Dropped' }
+            ].map((tab) => (
+              <button
+                key={tab.key}
+                onClick={() => {
+                  setStatusFilter(tab.key);
+                  setFilterCurrentPage(1);
+                }}
+                className={`${
+                  filterState.statusFilter === tab.key
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </nav>
+        </div>
+      )}
+
+      {/* Demo Form */}
+      {showDemoForm && selectedEnrollmentForDemo ? (
+        <div className="bg-white rounded-lg shadow-lg p-6">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-bold text-black">
+              Schedule Demo - {selectedEnrollmentForDemo.studentName}
+            </h2>
+            <button
+              onClick={handleDemoCancel}
+              className="text-gray-500 hover:text-gray-700"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <DemoLeadForm
+            lead={selectedEnrollmentForDemo.lead}
+            onComplete={handleDemoComplete}
+            onCancel={handleDemoCancel}
+            teachers={teachers}
+          />
+        </div>
+      ) : 
+      
+      /* Edit Form */
+      showEditForm && selectedEnrollment ? (
         <div className="bg-white rounded-lg shadow-lg p-6">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-2xl font-bold text-black">Edit Enrollment</h2>
@@ -267,64 +692,14 @@ export default function EnrollmentList() {
               </svg>
             </button>
           </div>
-          <EditEnrollmentForm studentId={editingEnrollment._id} onComplete={handleEditComplete} />
-          {/* You would import and use EditEnrollmentForm here *
-          {/* <div className="p-4 bg-gray-100 rounded">
-            <p>Edit Enrollment Form Component would go here</p>
-            <button 
-              onClick={handleEditComplete}
-              className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-            >
-              Save Changes
-            </button>
-          </div> */}
+          <EditEnrollmentForm
+            studentId={selectedEnrollment._id}
+            onComplete={handleEditComplete}
+            onCancel={handleEditCancel}
+          />
         </div>
       ) : (
         <>
-          {/* Search */}
-          <div className="flex space-x-4 text-black m-5">
-            <div className="flex-1">
-              <input
-                type="text"
-                placeholder="Search by name, phone, email, or username..."
-                value={searchQuery}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value);
-                  setCurrentPage(1);
-                }}
-                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-          </div>
-
-          {/* Status Tabs */}
-          <div className="border-b border-gray-200">
-            <nav className="-mb-px flex space-x-8 overflow-x-auto">
-              {[
-                { key: 'all', label: 'All Students' },
-                { key: 'active', label: 'Active' },
-                { key: 'inactive', label: 'Inactive' },
-                { key: 'graduated', label: 'Graduated' },
-                { key: 'dropped', label: 'Dropped' }
-              ].map((tab) => (
-                <button
-                  key={tab.key}
-                  onClick={() => {
-                    setActiveTab(tab.key as any);
-                    setCurrentPage(1);
-                  }}
-                  className={`${
-                    activeTab === tab.key
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </nav>
-          </div>
-
           {/* Results summary */}
           <div className="text-sm text-gray-600">
             Showing {startIndex + 1} to {Math.min(endIndex, filteredEnrollments.length)} of {filteredEnrollments.length} enrollments
@@ -338,19 +713,16 @@ export default function EnrollmentList() {
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Details</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Username</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rating</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Academic</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Enrolled</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Demos</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Book a Demo</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {currentEnrollments.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="px-6 py-4 text-center text-gray-500">
+                      <td colSpan={6} className="px-6 py-4 text-center text-gray-500">
                         No enrollments found
                       </td>
                     </tr>
@@ -359,27 +731,18 @@ export default function EnrollmentList() {
                       <tr key={enrollment._id}>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm font-medium text-gray-900">{enrollment.studentName}</div>
-                          <div className="text-sm text-gray-500">Age: {enrollment.age}</div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">Student: {enrollment.phoneNumber}</div>
                           <div className="text-sm text-gray-900">
-                            Parents: {enrollment.parentsPhoneNumbers.join(', ') || 'Not provided'}
+                            <div>Phone: {enrollment.studentPhone}</div>
+                            <div>Email: {enrollment.email}</div>
                           </div>
-                          <div className="text-sm text-gray-500">{enrollment.email}</div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">{enrollment.city}</div>
-                          <div className="text-sm text-gray-500">{enrollment.address}</div>
-                          <div className="text-sm text-gray-500">Counsellor: {enrollment.counsellor}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">{enrollment.studentUsername}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center">
-                            {getRatingStars(enrollment.studentRating)}
-                            <span className="ml-2 text-sm text-gray-600">({enrollment.studentRating}/5)</span>
+                          <div className="text-sm text-gray-900">
+                            <div>Board: {enrollment.board}</div>
+                            <div>Class: {enrollment.class}</div>
+                            <div>Subjects: {enrollment.subjects?.join(', ') || 'No subjects'}</div>
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -388,7 +751,11 @@ export default function EnrollmentList() {
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {new Date(enrollment.createdAt).toLocaleDateString('en-GB')}
+                          {demoCounts[enrollment.leadId] ? (
+                            <div className="font-medium">{demoCounts[enrollment.leadId]} demos</div>
+                          ) : (
+                            <span>0 demos</span>
+                          )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                           <div className="flex flex-col items-start gap-1">
@@ -409,12 +776,11 @@ export default function EnrollmentList() {
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                           <div className="flex flex-col items-start gap-1">
                             <button
-                              onClick={() => handleBookDemoClick()}
+                              onClick={() => handleBookDemoClick(enrollment)}
                               className="text-blue-600 hover:text-blue-900"
                             >
                               Demo
                             </button>
-                          
                           </div>
                         </td>
                       </tr>
@@ -426,7 +792,7 @@ export default function EnrollmentList() {
           </div>
 
           {/* Pagination */}
-          {totalPages > 1 && (
+          {filteredEnrollments.length > itemsPerPage && (
             <div className="flex items-center justify-between border-t border-gray-200 bg-white px-4 py-3 sm:px-6">
               <div className="flex flex-1 justify-between sm:hidden">
                 <button
@@ -511,28 +877,24 @@ export default function EnrollmentList() {
               <div>
                 <h4 className="font-semibold text-gray-700">Student Information</h4>
                 <p><span className="font-medium">Name:</span> {selectedEnrollment.studentName}</p>
-                <p><span className="font-medium">Age:</span> {selectedEnrollment.age}</p>
-                <p><span className="font-medium">Phone:</span> {selectedEnrollment.phoneNumber}</p>
-                <p><span className="font-medium">Parents Phone:</span> {selectedEnrollment.parentsPhoneNumbers?.join(', ') || 'Not provided'}</p>
+                <p><span className="font-medium">Phone:</span> {selectedEnrollment.studentPhone}</p>
+                <p><span className="font-medium">Parents Phone:</span> {selectedEnrollment.parentPhone}</p>
                 <p><span className="font-medium">Email:</span> {selectedEnrollment.email}</p>
               </div>
               <div>
                 <h4 className="font-semibold text-gray-700">Location Details</h4>
                 <p><span className="font-medium">City:</span> {selectedEnrollment.city}</p>
-                <p><span className="font-medium">Address:</span> {selectedEnrollment.address}</p>
                 <p><span className="font-medium">Counsellor:</span> {selectedEnrollment.counsellor}</p>
               </div>
             </div>
 
             <div className="mb-6">
               <h4 className="font-semibold text-gray-700 mb-2">Account Information</h4>
-              <p><span className="font-medium">Username:</span> {selectedEnrollment.studentUsername}</p>
-              <p><span className="font-medium">Rating:</span> {selectedEnrollment.studentRating}/5</p>
               <p><span className="font-medium">Status:</span> {selectedEnrollment.status || 'Active'}</p>
               <p><span className="font-medium">Enrolled On:</span> {new Date(selectedEnrollment.createdAt).toLocaleDateString()}</p>
             </div>
 
-            {selectedEnrollment.subjects && selectedEnrollment.subjects.length > 0 ? (
+            {selectedEnrollment.subjects && Array.isArray(selectedEnrollment.subjects) && selectedEnrollment.subjects.length > 0 ? (
               <div>
                 <h4 className="font-semibold text-gray-700 mb-2">Subjects</h4>
                 <div className="space-y-4">
@@ -550,11 +912,51 @@ export default function EnrollmentList() {
                           <p><span className="font-medium">Time Slots:</span></p>
                           <ul className="list-disc list-inside">
                             {subject.timeSlots?.map((slot, i) => (
-                              <li key={i}>{slot}</li>
+                              <li key={i} className="flex items-center gap-2">
+                                {slot}
+                                {subject.meetingDetails && (
+                                  <div className="flex items-center gap-1 ml-2">
+                                    <a 
+                                      href={subject.meetingDetails.joinUrl} 
+                                      target="_blank" 
+                                      rel="noopener noreferrer"
+                                      className="text-blue-600 hover:text-blue-800 text-sm"
+                                    >
+                                      Join Link
+                                    </a>
+                                    <button
+                                      onClick={() => {
+                                        if (subject.meetingDetails) {
+                                          navigator.clipboard.writeText(subject.meetingDetails.joinUrl);
+                                          alert('Link copied!');
+                                        }
+                                      }}
+                                      className="text-gray-600 hover:text-gray-800"
+                                      title="Copy Link"
+                                    >
+                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                                      </svg>
+                                    </button>
+                                  </div>
+                                )}
+                              </li>
                             ))}
                           </ul>
                           <p><span className="font-medium">Class Amount:</span> ₹{subject.paymentDetails?.classAmount || 0}</p>
                           <p><span className="font-medium">Amount Paid:</span> ₹{subject.paymentDetails?.amountPaid || 0}</p>
+                          {subject.paymentDetails?.lastPayments && subject.paymentDetails.lastPayments.length > 0 && (
+                            <div className="mt-2">
+                              <p className="font-medium">Last Payments:</p>
+                              <ul className="list-disc list-inside">
+                                {subject.paymentDetails.lastPayments.map((payment, i) => (
+                                  <li key={i}>
+                                    ₹{payment.amount} on {new Date(payment.date).toLocaleDateString()}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
                         </div>
                       </div>
                       {subject.remarks && subject.remarks.length > 0 && (
