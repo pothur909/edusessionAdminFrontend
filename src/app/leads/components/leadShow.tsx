@@ -4,10 +4,16 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import EditLeadForm from "./leadEdit";
 import DemoLeadForm from "../../demo/components/demoForm";
-import EnrollmentForm from "@/app/enrollment/components/EnrollmentAddForm";
+import EnrollmentForm from "../../enrollment/components/enrollmentAddForm";
+import { Search, Filter, X, Calendar } from 'lucide-react';
+import * as XLSX from 'xlsx';
+import { useFilter } from '@/context/FilterContext';
+import { FilterPanel } from '@/app/components/FilterPanel';
+import { exportToExcel } from '@/utils/excelExport';
+
 
 interface Demo {
-  _id: string;
+  _id?: string;
   lead: string;
   date: string;
   time: string;
@@ -15,18 +21,9 @@ interface Demo {
   board: string;
   class: string;
   subject: string;
-  status:
-    | "demo_scheduled"
-    | "demo_completed"
-    | "demo_cancelled"
-    | "demo_no_show"
-    | "demo_rescheduled"
-    | "demo_rescheduled_cancelled"
-    | "demo_rescheduled_completed"
-    | "demo_rescheduled_no_show";
-  remarks: string[];
-  createdAt: string;
-  updatedAt: string;
+  status: 'demo_scheduled' | 'demo_completed' | 'demo_cancelled' | 'demo_no_show' | 'demo_rescheduled' | 'demo_rescheduled_cancelled' | 'demo_rescheduled_completed' | 'demo_rescheduled_no_show';
+  remarks: string;
+  preferredTimeSlots: string;
 }
 
 interface Teacher {
@@ -52,13 +49,7 @@ interface Lead {
   board: string;
   class: string;
   subjects: string[];
-  status:
-    | "new"
-    | "contacted"
-    | "converted"
-    | "not_interested"
-    | "follow_up"
-    | "interested";
+  status: 'new' | 'contacted' | 'converted' | 'not_interested' | 'demo_scheduled' | 'demo_completed' | 'demo_cancelled' | 'demo_no_show' | 'demo_rescheduled' | 'demo_rescheduled_cancelled' | 'demo_rescheduled_completed' | 'demo_rescheduled_no_show' | 'no_response_from_Lead';
   notes: string;
   createdAt: string;
   updatedAt: string;
@@ -66,13 +57,14 @@ interface Lead {
   classesPerWeek: number;
   courseInterested: string;
   modeOfContact: string;
+  preferredTimeSlots: string;
   counsellor: string;
-  sessionEndDate?: string;
-  remarks: string[];
-  existingStudentId?: string; // Add this for existing student reference
-  preferredTimeSlots?: string; // Add this
-  city?: string; // Add this
-  demo?: Demo | null; // Add this for demo data
+  sessionEndDate: string;
+  sessionBeginDate: string;
+  remarks: string | string[];
+  city: string;
+  existingStudentId?: string;
+  demo?: Demo | null;
 }
 
 interface DemoResponse {
@@ -148,69 +140,89 @@ export default function LeadsList() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [isLoadingTeachers, setIsLoadingTeachers] = useState(false);
-  const [activeTab, setActiveTab] = useState<
-    "all" | "new" | "contacted" | "converted" | "not_interested" | "follow_up"
-    // | "demo_scheduled"
-    // | "demo_completed"
-    // | "demo_cancelled"
-    // | "demo_no_show"
-    // | "demo_rescheduled"
-    // | "demo_rescheduled_cancelled"
-    // | "demo_rescheduled_completed"
-    // | "demo_rescheduled_no_show"
-    // | "no_response_from_Lead"
-  >("all");
   const [deleteLoading, setDeleteLoading] = useState<string | null>(null);
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const [showEditForm, setShowEditForm] = useState(false);
   const [bookDemoForm, setBookDemoForm] = useState(false);
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
 
   // enroll use state
   const [enrolledStudents, setEnrolledStudents] = useState<Enrollment[]>([]);
   const [showEnrollmentForm, setShowEnrollmentForm] = useState(false);
   const [enrollmentLoading, setEnrollmentLoading] = useState(false);
 
-  // Pagination states
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(10);
+  const {
+    filterState,
+    setSearchQuery,
+    setDateRange,
+    setMonthFilter,
+    setYearFilter,
+    setBoardFilter,
+    setClassFilter,
+    setSubjectFilter,
+    setStatusFilter,
+    setQuickMonthSelection,
+    setCurrentPage,
+    clearAllFilters,
+    hasActiveFilters,
+  } = useFilter();
+
   const router = useRouter();
+
+  // Get unique values for filters
+  const uniqueBoards = [
+    ...new Set(leads.map((lead) => lead.board).filter(Boolean)),
+  ];
+  const uniqueClasses = [
+    ...new Set(leads.map((lead) => lead.class).filter(Boolean)),
+  ];
+  const uniqueSubjects = [
+    ...new Set(leads.flatMap((lead) => lead.subjects || []).filter(Boolean)),
+  ];
+
+  const months = [
+    { value: 'all', label: 'All Months' },
+    { value: '1', label: 'January' },
+    { value: '2', label: 'February' },
+    { value: '3', label: 'March' },
+    { value: '4', label: 'April' },
+    { value: '5', label: 'May' },
+    { value: '6', label: 'June' },
+    { value: '7', label: 'July' },
+    { value: '8', label: 'August' },
+    { value: '9', label: 'September' },
+    { value: '10', label: 'October' },
+    { value: '11', label: 'November' },
+    { value: '12', label: 'December' }
+  ];
+  
+  const demoStatuses = [
+    { value: 'all', label: 'All Demo Status' },
+    { value: 'no_demo', label: 'No Demo' },
+    { value: 'demo_scheduled', label: 'Demo Scheduled' },
+    { value: 'demo_completed', label: 'Demo Completed' },
+    { value: 'demo_cancelled', label: 'Demo Cancelled' },
+    { value: 'demo_no_show', label: 'Demo No Show' },
+    { value: 'demo_rescheduled', label: 'Demo Rescheduled' },
+    { value: 'demo_rescheduled_cancelled', label: 'Demo Rescheduled Cancelled' },
+    { value: 'demo_rescheduled_completed', label: 'Demo Rescheduled Completed' },
+    { value: 'demo_rescheduled_no_show', label: 'Demo Rescheduled No Show' }
+  ];
 
   useEffect(() => {
     fetchLeads();
     fetchEnrolledStudents(); // Add this line to fetch enrolled students on component mount
-  }, [activeTab]);
+  }, [filterState.statusFilter]);
 
   const baseUrl = process.env.BASE_URL;
 
-  // const fetchLeads = async () => {
-  //   try {
-  //     const response = await fetch(
-  //       `${baseUrl}/api/leads/viewleads${
-  //         activeTab !== "all" ? `?status=${activeTab}` : ""
-  //       }`
-  //     );
-  //     const data = await response.json();
-  //     if (data.success) {
-  //       setLeads(data.data);
-  //     } else {
-  //       setError(data.message || "Failed to fetch leads");
-  //     }
-  //   } catch (error) {
-  //     setError("An error occurred while fetching leads");
-  //   } finally {
-  //     setIsLoading(false);
-  //   }
-  // };
-
-  // Just replace your fetchLeads function with this:
   const fetchLeads = async () => {
     try {
       const response = await fetch(
         `${baseUrl}/api/leads/viewleads${
-          activeTab !== "all" ? `?status=${activeTab}` : ""
+          filterState.statusFilter !== "all" ? `?status=${filterState.statusFilter}` : ""
         }`
       );
       const data = await response.json();
@@ -312,30 +324,36 @@ export default function LeadsList() {
   };
 
   const handleEditClick = (lead: Lead) => {
-    setEditingLead(lead);
-    setShowEditForm(true);
+    router.push(`/leads/edit/${lead._id}`);
   };
 
-  const fetchTeachers = async (board: string, className: string, subject: string) => {
+  const fetchTeachers = async (
+    board: string,
+    className: string,
+    subject: string
+  ) => {
     try {
       setIsLoadingTeachers(true);
-      const response = await fetch('http://localhost:6969/api/fetchTeacherByCardId', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          type: "1",
-          classType: "normal",
-          board,
-          className,
-          subject
-        })
-      });
+      const response = await fetch(
+        "http://localhost:6969/api/fetchTeacherByCardId",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            type: "1",
+            classType: "normal",
+            board,
+            className,
+            subject,
+          }),
+        }
+      );
       const data: TeacherResponse = await response.json();
       setTeachers(data.teachers);
     } catch (error) {
-      console.error('Error fetching teachers:', error);
+      console.error("Error fetching teachers:", error);
     } finally {
       setIsLoadingTeachers(false);
     }
@@ -343,10 +361,15 @@ export default function LeadsList() {
 
   const handleBookDemoClick = async (lead: Lead) => {
     try {
-      console.log("Original lead data:", lead);
-      
+      setEnrollmentLoading(true);
+
       // Fetch teachers when booking demo
-      if (lead.board && lead.class && lead.subjects && lead.subjects.length > 0) {
+      if (
+        lead.board &&
+        lead.class &&
+        lead.subjects &&
+        lead.subjects.length > 0
+      ) {
         await fetchTeachers(lead.board, lead.class, lead.subjects[0]);
       }
 
@@ -358,7 +381,8 @@ export default function LeadsList() {
         time: "",
         subject: "",
         status: "demo_scheduled",
-        remarks: [],
+        remarks: "",
+        preferredTimeSlots: lead.preferredTimeSlots || "",
         board: lead.board || "",
         class: lead.class || "",
       };
@@ -381,6 +405,7 @@ export default function LeadsList() {
             subject: existingDemo.subject || "",
             status: existingDemo.status || "demo_scheduled",
             remarks: existingDemo.remarks || "",
+            preferredTimeSlots: existingDemo.preferredTimeSlots || lead.preferredTimeSlots || "",
           });
         }
       } catch (error) {
@@ -388,11 +413,16 @@ export default function LeadsList() {
       }
 
       console.log("Demo data being set:", demoData);
-      setEditingLead(lead);
+      setEditingLead({
+        ...lead,
+        remarks: Array.isArray(lead.remarks) ? lead.remarks.join(", ") : lead.remarks
+      });
       setBookDemoForm(true);
     } catch (error) {
       console.error("Error in handleBookDemoClick:", error);
       alert("Error preparing demo form. Please try again.");
+    } finally {
+      setEnrollmentLoading(false);
     }
   };
 
@@ -413,7 +443,12 @@ export default function LeadsList() {
       setEnrollmentLoading(true);
 
       // Fetch teachers when enrolling
-      if (lead.board && lead.class && lead.subjects && lead.subjects.length > 0) {
+      if (
+        lead.board &&
+        lead.class &&
+        lead.subjects &&
+        lead.subjects.length > 0
+      ) {
         await fetchTeachers(lead.board, lead.class, lead.subjects[0]);
       }
 
@@ -430,80 +465,49 @@ export default function LeadsList() {
         console.log("Enrollment response:", enrollmentData);
         console.log("Demo response:", demoData);
 
-        // Check if enrollment data is an array
-        if (Array.isArray(enrollmentData)) {
-          // Find student by lead ID or matching contact info
-          const existingStudent = enrollmentData.find(
-            (student: Enrollment) =>
-              student.lead === lead._id ||
-              (student.email &&
-                student.email.toLowerCase() === lead.email?.toLowerCase()) ||
-              (student.phoneNumber && student.phoneNumber === lead.studentPhone)
+        if (enrollmentData.success && enrollmentData.data) {
+          const existingEnrollment = enrollmentData.data.find(
+            (enrollment: Enrollment) => enrollment.lead === lead._id
           );
 
-          if (existingStudent) {
-            console.log("Found existing student:", existingStudent);
-
-            // Fetch subjects for this student
-            try {
-              const subjectsResponse = await fetch(
-                `${baseUrl}/api/subject/${existingStudent._id}`
-              );
-              const subjectsData = await subjectsResponse.json();
-              console.log("Subjects response:", subjectsData);
-
-              // If enrollment exists, set it for editing with demo data and subjects
-              setEditingLead({
-                ...lead,
-                existingStudentId: existingStudent._id,
-                city: existingStudent.city || lead.city || "",
-                preferredTimeSlots: lead.preferredTimeSlots || "",
-                demo: demoData.demos?.[0] || null,
-                subjects: subjectsData.data || [], // Add subjects data
-              });
-            } catch (error) {
-              console.error("Error fetching subjects:", error);
-              // Still set the lead with existing student data even if subjects fetch fails
-              setEditingLead({
-                ...lead,
-                existingStudentId: existingStudent._id,
-                city: existingStudent.city || lead.city || "",
-                preferredTimeSlots: lead.preferredTimeSlots || "",
-                demo: demoData.demos?.[0] || null,
-              });
-            }
-          } else {
-            console.log(
-              "No existing student found, proceeding with new enrollment"
-            );
+          if (existingEnrollment) {
+            console.log("Found existing enrollment:", existingEnrollment);
             setEditingLead({
               ...lead,
               city: lead.city || "",
               preferredTimeSlots: lead.preferredTimeSlots || "",
               demo: demoData.demos?.[0] || null,
+              existingStudentId: existingEnrollment._id,
+              remarks: Array.isArray(lead.remarks) ? lead.remarks.join(", ") : lead.remarks
+            });
+          } else {
+            console.log("No existing student found, proceeding with new enrollment");
+            setEditingLead({
+              ...lead,
+              city: lead.city || "",
+              preferredTimeSlots: lead.preferredTimeSlots || "",
+              demo: demoData.demos?.[0] || null,
+              remarks: Array.isArray(lead.remarks) ? lead.remarks.join(", ") : lead.remarks
             });
           }
         } else {
-          console.log(
-            "Invalid enrollment response format, proceeding with new enrollment"
-          );
+          console.log("Invalid enrollment response format, proceeding with new enrollment");
           setEditingLead({
             ...lead,
             city: lead.city || "",
             preferredTimeSlots: lead.preferredTimeSlots || "",
             demo: demoData.demos?.[0] || null,
+            remarks: Array.isArray(lead.remarks) ? lead.remarks.join(", ") : lead.remarks
           });
         }
       } catch (error) {
-        console.log(
-          "Error fetching data, proceeding with new enrollment:",
-          error
-        );
+        console.log("Error fetching data, proceeding with new enrollment:", error);
         setEditingLead({
           ...lead,
           city: lead.city || "",
           preferredTimeSlots: lead.preferredTimeSlots || "",
           demo: null,
+          remarks: Array.isArray(lead.remarks) ? lead.remarks.join(", ") : lead.remarks
         });
       }
 
@@ -538,28 +542,79 @@ export default function LeadsList() {
   };
 
   const filteredLeads = leads.filter((lead) => {
-    const searchLower = searchQuery.toLowerCase();
+    const searchLower = filterState.searchQuery.toLowerCase();
     const studentName = lead.studentName?.toLowerCase() || "";
     const studentPhone = lead.studentPhone || "";
     const email = lead.email?.toLowerCase() || "";
     const parentPhone = lead.parentPhone || "";
 
+    // Search filter
     const matchesSearch =
+      filterState.searchQuery === "" ||
       studentName.includes(searchLower) ||
-      studentPhone.includes(searchQuery) ||
+      studentPhone.includes(filterState.searchQuery) ||
       email.includes(searchLower) ||
-      parentPhone.includes(searchQuery);
+      parentPhone.includes(filterState.searchQuery);
 
+    // Status filter
     const matchesTab =
-      activeTab === "all" || lead.status?.toLowerCase() === activeTab;
+      filterState.statusFilter === "all" || lead.status?.toLowerCase() === filterState.statusFilter;
 
-    return matchesSearch && matchesTab;
+    // Date range filter
+    const leadDate = new Date(lead.createdAt);
+    const matchesDateRange =
+      (!filterState.dateRange.startDate || leadDate >= new Date(filterState.dateRange.startDate)) &&
+      (!filterState.dateRange.endDate ||
+        leadDate <= new Date(filterState.dateRange.endDate + "T23:59:59"));
+
+    // Month filter
+    const leadMonth = leadDate.getMonth() + 1; // 1-12
+    const matchesMonth =
+      filterState.monthFilter === "all" || leadMonth.toString() === filterState.monthFilter;
+
+    // Year filter
+    const leadYear = leadDate.getFullYear();
+    const matchesYear =
+      filterState.yearFilter === "all" || leadYear.toString() === filterState.yearFilter;
+
+    // Demo status filter
+    let matchesDemoStatus = true;
+    if (filterState.demoStatusFilter !== "all") {
+      if (filterState.demoStatusFilter === "no_demo") {
+        matchesDemoStatus = !lead.demo;
+      } else {
+        matchesDemoStatus = lead.demo?.status === filterState.demoStatusFilter;
+      }
+    }
+
+    // Board filter
+    const matchesBoard = filterState.boardFilter === "all" || lead.board === filterState.boardFilter;
+
+    // Class filter
+    const matchesClass = filterState.classFilter === "all" || lead.class === filterState.classFilter;
+
+    // Subject filter
+    const matchesSubject =
+      filterState.subjectFilter === "all" ||
+      (lead.subjects && lead.subjects.includes(filterState.subjectFilter));
+
+    return (
+      matchesSearch &&
+      matchesTab &&
+      matchesDateRange &&
+      matchesMonth &&
+      matchesYear &&
+      matchesDemoStatus &&
+      matchesBoard &&
+      matchesClass &&
+      matchesSubject
+    );
   });
 
   // Pagination logic
-  const totalPages = Math.ceil(filteredLeads.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
+  const totalPages = Math.ceil(filteredLeads.length / filterState.itemsPerPage);
+  const startIndex = (filterState.currentPage - 1) * filterState.itemsPerPage;
+  const endIndex = startIndex + filterState.itemsPerPage;
   const currentLeads = filteredLeads.slice(startIndex, endIndex);
 
   const handlePageChange = (page: number) => {
@@ -589,6 +644,37 @@ export default function LeadsList() {
     }
   };
 
+  const handleExportExcel = () => {
+    const columns = [
+      { key: 'studentName', label: 'Student Name' },
+      { key: 'studentPhone', label: 'Student Phone' },
+      { key: 'parentPhone', label: 'Parent Phone' },
+      { key: 'email', label: 'Email' },
+      { key: 'board', label: 'Board' },
+      { key: 'class', label: 'Class' },
+      { key: 'subjects', label: 'Subjects' },
+      { key: 'status', label: 'Status' },
+      { key: 'createdAt', label: 'Created At' }
+    ];
+
+    const data = filteredLeads.map(lead => ({
+      studentName: lead.studentName,
+      studentPhone: lead.studentPhone,
+      parentPhone: lead.parentPhone,
+      email: lead.email,
+      board: lead.board,
+      class: lead.class,
+      subjects: lead.subjects.join(', '),
+      status: lead.status,
+      createdAt: new Date(lead.createdAt).toLocaleDateString()
+    }));
+
+    exportToExcel(data, columns, {
+      filename: 'leads.xlsx',
+      sheetName: 'Leads'
+    });
+  };
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
@@ -607,8 +693,20 @@ export default function LeadsList() {
 
   return (
     <div className="space-y-6 text-black m-9">
+      {!showEditForm && !showEnrollmentForm && !bookDemoForm && (
+        <div className="flex justify-between items-center">
+          <h1 className="text-2xl font-bold">Sales Leads</h1>
+          <button
+            onClick={handleExportExcel}
+            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+          >
+            Download Data
+          </button>
+        </div>
+      )}
+
       {/* Edit Form */}
-      {showEditForm && editingLead ? (
+      {showEditForm && editingLead && !showEnrollmentForm && !bookDemoForm ? (
         <div className="p-3">
           <div className="flex justify-between items-center mb-2">
             <h2 className="text-2xl font-bold text-black">Edit Lead</h2>
@@ -674,24 +772,26 @@ export default function LeadsList() {
                     key={teacher._id}
                     className={`p-4 border rounded-lg ${
                       teacher.isAvailable && !teacher.isLocked
-                        ? 'bg-green-50 border-green-200'
-                        : 'bg-gray-50 border-gray-200'
+                        ? "bg-green-50 border-green-200"
+                        : "bg-gray-50 border-gray-200"
                     }`}
                   >
                     <h4 className="font-medium">{teacher.name}</h4>
                     <p className="text-sm text-gray-600">{teacher.email}</p>
-                    <p className="text-sm text-gray-600">{teacher.phoneNumber}</p>
+                    <p className="text-sm text-gray-600">
+                      {teacher.phoneNumber}
+                    </p>
                     <div className="mt-2">
                       <span
                         className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                           teacher.isAvailable && !teacher.isLocked
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-red-100 text-red-800'
+                            ? "bg-green-100 text-green-800"
+                            : "bg-red-100 text-red-800"
                         }`}
                       >
                         {teacher.isAvailable && !teacher.isLocked
-                          ? 'Available'
-                          : 'Not Available'}
+                          ? "Available"
+                          : "Not Available"}
                       </span>
                     </div>
                   </div>
@@ -717,10 +817,7 @@ export default function LeadsList() {
         <div className="bg-white rounded-lg shadow-lg p-6">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-2xl font-bold text-black">
-              {editingLead.existingStudentId
-                ? "Update Student"
-                : "Enroll Student"}{" "}
-              - {editingLead.studentName}
+              {editingLead.existingStudentId ? "Update Student" : "Enroll Student"} - {editingLead.studentName}
             </h2>
             <button
               onClick={handleEnrollmentCancel}
@@ -741,44 +838,6 @@ export default function LeadsList() {
               </svg>
             </button>
           </div>
-          {isLoadingTeachers ? (
-            <div className="flex justify-center items-center p-4">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
-            </div>
-          ) : (
-            <div className="mb-6">
-              <h3 className="text-lg font-semibold mb-2">Available Teachers</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {teachers.map((teacher) => (
-                  <div
-                    key={teacher._id}
-                    className={`p-4 border rounded-lg ${
-                      teacher.isAvailable && !teacher.isLocked
-                        ? 'bg-green-50 border-green-200'
-                        : 'bg-gray-50 border-gray-200'
-                    }`}
-                  >
-                    <h4 className="font-medium">{teacher.name}</h4>
-                    <p className="text-sm text-gray-600">{teacher.email}</p>
-                    <p className="text-sm text-gray-600">{teacher.phoneNumber}</p>
-                    <div className="mt-2">
-                      <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          teacher.isAvailable && !teacher.isLocked
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-red-100 text-red-800'
-                        }`}
-                      >
-                        {teacher.isAvailable && !teacher.isLocked
-                          ? 'Available'
-                          : 'Not Available'}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
           <EnrollmentForm
             lead={editingLead}
             onComplete={handleEnrollmentComplete}
@@ -788,45 +847,133 @@ export default function LeadsList() {
         </div>
       ) : (
         <>
-          {/* Search */}
-          <div className="flex space-x-4 text-black m-5">
-            <div className="flex-1">
+
+       {/* <div className="bg-gradient-to-r from-blue-50 to-indigo-50 px-6 py-8">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex justify-between items-start mb-6">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">Sales Leads</h1>
+          
+            </div>
+            <div className="flex items-center space-x-4">
+              <div className="bg-white px-4 py-2 rounded-lg shadow-sm border">
+                <span className="text-sm text-gray-600">Showing: </span>
+                <span className="font-semibold text-blue-600">
+                  {filterState.dateRange.startDate && filterState.dateRange.endDate ? 'Custom Date Range' : 'All Time'}
+                </span>
+              </div>
+              <button
+                onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+                  showAdvancedFilters || hasActiveFilters()
+                    ? 'bg-blue-600 text-white' 
+                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                <Filter size={18} />
+                <span>Filters</span>
+                {hasActiveFilters() && (
+                  <span className="bg-white text-blue-600 text-xs px-2 py-0.5 rounded-full font-bold">
+                    {[filterState.searchQuery, filterState.dateRange.startDate, filterState.dateRange.endDate, filterState.monthFilter !== 'all', 
+                      filterState.yearFilter !== 'all', filterState.boardFilter !== 'all', filterState.classFilter !== 'all', 
+                      filterState.subjectFilter !== 'all', filterState.demoStatusFilter !== 'all', filterState.quickMonthSelection !== 'all']
+                      .filter(Boolean).length}
+                  </span>
+                )}
+              </button>
+            </div>
+          </div>
+
+          
+          <div className="flex items-center  space-x-4 mb-4">
+           
+            <div className="flex-1 relative max-w-md">
+              <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+              
               <input
                 type="text"
                 placeholder="Search by name, phone, or email..."
-                value={searchQuery}
+                value={filterState.searchQuery}
                 onChange={(e) => {
                   setSearchQuery(e.target.value);
                   setCurrentPage(1);
                 }}
-                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white shadow-sm"
               />
             </div>
+
+            
+            <div className="flex items-center space-x-2">
+              <label className="text-sm font-medium text-gray-700 whitespace-nowrap">Quick Month:</label>
+              <select
+                value={filterState.quickMonthSelection}
+                onChange={(e) => {
+                  setQuickMonthSelection(e.target.value);
+                  setMonthFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
+              >
+                {months.map(month => (
+                  <option key={month.value} value={month.value}>{month.label}</option>
+                ))}
+              </select>
+            </div>
+
+              
+            {hasActiveFilters() && (
+              <button
+                onClick={clearAllFilters}
+                className="flex items-center space-x-2 px-4 py-2.5 bg-gray-500 text-white rounded-lg hover:bg-gray-600 font-medium transition-colors shadow-sm"
+              >
+                <X size={16} />
+                <span>Reset</span>
+              </button>
+            )}
           </div>
+        </div>
+      </div> */}
+
+      
+
+      <FilterPanel
+        showAdvancedFilters={showAdvancedFilters}
+        setShowAdvancedFilters={setShowAdvancedFilters}
+        months={months}
+        demoStatuses={demoStatuses}
+        uniqueBoards={uniqueBoards}
+        uniqueClasses={uniqueClasses}
+        uniqueSubjects={uniqueSubjects}
+        statusOptions={[
+          { value: 'all', label: 'All Status' },
+          { value: 'new', label: 'New' },
+          { value: 'contacted', label: 'Contacted' },
+          { value: 'converted', label: 'Converted' },
+          { value: 'not_interested', label: 'Not Interested' },
+          { value: 'follow_up', label: 'Follow Up' }
+        ]}
+        onApplyFilters={() => setShowAdvancedFilters(false)}
+      />
 
           {/* Status Tabs */}
           <div className="border-b border-gray-200">
-            <nav className="-mb-px flex space-x-8 overflow-x-auto">
+            <nav className="-mb-px flex space-x-8">
               {[
-                { key: "all", label: "All Leads" },
+                { key: "all", label: "All" },
                 { key: "new", label: "New" },
                 { key: "contacted", label: "Contacted" },
                 { key: "converted", label: "Converted" },
                 { key: "not_interested", label: "Not Interested" },
                 { key: "follow_up", label: "Follow Up" },
-                // { key: "demo_completed", label: "Demo Completed" },
-                // { key: "demo_cancelled", label: "Demo Cancelled" },
-                // { key: "demo_no_show", label: "Demo No Show" },
-                // { key: "no_response_from_Lead", label: "No Response" },
               ].map((tab) => (
                 <button
                   key={tab.key}
                   onClick={() => {
-                    setActiveTab(tab.key as any);
+                    setStatusFilter(tab.key as any);
                     setCurrentPage(1);
                   }}
                   className={`${
-                    activeTab === tab.key
+                    filterState.statusFilter === tab.key
                       ? "border-blue-500 text-blue-600"
                       : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
                   } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
@@ -838,19 +985,19 @@ export default function LeadsList() {
           </div>
 
           {/* Pagination Controls */}
-          {filteredLeads.length > itemsPerPage && (
+          {filteredLeads.length > filterState.itemsPerPage && (
             <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
               <div className="flex-1 flex justify-between sm:hidden">
                 <button
-                  onClick={() => handlePageChange(currentPage - 1)}
-                  disabled={currentPage === 1}
+                  onClick={() => handlePageChange(filterState.currentPage - 1)}
+                  disabled={filterState.currentPage === 1}
                   className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Previous
                 </button>
                 <button
-                  onClick={() => handlePageChange(currentPage + 1)}
-                  disabled={currentPage === totalPages}
+                  onClick={() => handlePageChange(filterState.currentPage + 1)}
+                  disabled={filterState.currentPage === totalPages}
                   className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Next
@@ -875,8 +1022,8 @@ export default function LeadsList() {
                     aria-label="Pagination"
                   >
                     <button
-                      onClick={() => handlePageChange(currentPage - 1)}
-                      disabled={currentPage === 1}
+                      onClick={() => handlePageChange(filterState.currentPage - 1)}
+                      disabled={filterState.currentPage === 1}
                       className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <span className="sr-only">Previous</span>
@@ -901,14 +1048,14 @@ export default function LeadsList() {
                         if (
                           page === 1 ||
                           page === totalPages ||
-                          (page >= currentPage - 1 && page <= currentPage + 1)
+                          (page >= filterState.currentPage - 1 && page <= filterState.currentPage + 1)
                         ) {
                           return (
                             <button
                               key={page}
                               onClick={() => handlePageChange(page)}
                               className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
-                                page === currentPage
+                                page === filterState.currentPage
                                   ? "z-10 bg-blue-50 border-blue-500 text-blue-600"
                                   : "bg-white border-gray-300 text-gray-500 hover:bg-gray-50"
                               }`}
@@ -917,8 +1064,8 @@ export default function LeadsList() {
                             </button>
                           );
                         } else if (
-                          page === currentPage - 2 ||
-                          page === currentPage + 2
+                          page === filterState.currentPage - 2 ||
+                          page === filterState.currentPage + 2
                         ) {
                           return (
                             <span
@@ -934,8 +1081,8 @@ export default function LeadsList() {
                     )}
 
                     <button
-                      onClick={() => handlePageChange(currentPage + 1)}
-                      disabled={currentPage === totalPages}
+                      onClick={() => handlePageChange(filterState.currentPage + 1)}
+                      disabled={filterState.currentPage === totalPages}
                       className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <span className="sr-only">Next</span>

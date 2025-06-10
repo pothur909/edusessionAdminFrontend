@@ -82,7 +82,7 @@ export default function EditLeadForm({ lead, onComplete }: EditLeadFormProps) {
   const [formData, setFormData] = useState(lead);
   const [boardData, setBoardData] = useState<BoardData[]>([]);
   const [boardLoading, setBoardLoading] = useState(true);
-
+  const [newRemark, setNewRemark] = useState('');
   const baseUrl = process.env.BASE_URL;
 
   // Fetch board data on component mount
@@ -129,7 +129,6 @@ export default function EditLeadForm({ lead, onComplete }: EditLeadFormProps) {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-
     setFormData(prev => {
       const newFormData = { ...prev, [name]: value };
 
@@ -148,19 +147,25 @@ export default function EditLeadForm({ lead, onComplete }: EditLeadFormProps) {
     });
   };
 
+  const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
   const handleSubjectChange = (subject: string) => {
     setFormData((prev) => {
       const currentSubjects = prev.subjects || [];
       const isSelected = currentSubjects.includes(subject);
 
       if (isSelected) {
-        // Remove subject
         return {
           ...prev,
           subjects: currentSubjects.filter((s) => s !== subject),
         };
       } else {
-        // Add subject
         return {
           ...prev,
           subjects: [...currentSubjects, subject],
@@ -180,11 +185,24 @@ export default function EditLeadForm({ lead, onComplete }: EditLeadFormProps) {
     }
   };
 
+  // Add this function before handleSubmit
+  const formatDateForDisplay = (dateString: string) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toISOString().split('T')[0];
+  };
+
+  const formatDateForSubmission = (dateString: string) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toISOString();
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      // Prepare data for submission - convert date back to full format if needed
+      // Prepare data for submission
       const submissionData = {
         ...formData,
         sessionEndDate: formData.sessionEndDate
@@ -199,16 +217,19 @@ export default function EditLeadForm({ lead, onComplete }: EditLeadFormProps) {
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify(formData),
+          body: JSON.stringify(submissionData), // Use submissionData instead of formData
         }
       );
 
       const data = await response.json();
       if (data.success) {
         onComplete(); // Call the onComplete callback to close the form
+      } else {
+        throw new Error(data.message || 'Failed to update lead');
       }
     } catch (error) {
       console.error("Error:", error);
+      alert('Failed to update lead. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -507,13 +528,13 @@ export default function EditLeadForm({ lead, onComplete }: EditLeadFormProps) {
                         [e.target.name]: e.target.value,
                       })
                     }
-                    onInput={(e) => {
-                      const value = Number(e.target.value);
+                    onInput={(e: React.FormEvent<HTMLInputElement>) => {
+                      const value = Number(e.currentTarget.value);
                       if (value > 7) {
-                        e.target.value = 7;
+                        e.currentTarget.value = '7';
                       }
-                      if (value < 1 && e.target.value !== "") {
-                        e.target.value = 1;
+                      if (value < 1 && e.currentTarget.value !== "") {
+                        e.currentTarget.value = '1';
                       }
                     }}
                     min="1"

@@ -22,7 +22,10 @@ interface Lead {
   preferredTimeSlots: string;
   counsellor: string;
   sessionEndDate: string;
-  remarks: string;
+  remarks: string | string[];
+  city?: string;
+  existingStudentId?: string;
+  demo?: Demo | null;
 }
 
 interface Demo {
@@ -34,7 +37,7 @@ interface Demo {
   board: string;
   class: string;
   subject: string;
-  status: 'demo_scheduled' | 'demo_completed' | 'demo_cancelled' | 'demo_no_show' | 'demo_rescheduled' | 'demo_rescheduled_cancelled' | 'demo_rescheduled_completed' | 'demo_rescheduled_no_show';
+  status: 'scheduled' | 'completed' | 'cancelled' | 'no_show' | 'rescheduled' | 'rescheduled_cancelled' | 'rescheduled_completed' | 'rescheduled_no_show';
   remarks: string;
   preferredTimeSlots: string;
 }
@@ -78,7 +81,7 @@ export default function DemoLeadForm({ lead, onComplete, onCancel, teachers }: D
     board: lead.board || '',
     class: lead.class || '',
     subject: '',
-    status: 'demo_scheduled',
+    status: 'scheduled',
     remarks: '',
     preferredTimeSlots: lead.preferredTimeSlots || '',
   });
@@ -104,23 +107,22 @@ export default function DemoLeadForm({ lead, onComplete, onCancel, teachers }: D
   const getSubjectDemoStatus = (subject: string) => {
     const demo = existingDemos.find(d => d.subject === subject);
     if (!demo) return 'no_demo';
-    if (demo.status === 'demo_completed' || demo.status === 'demo_rescheduled_completed') return 'completed';
-    if (demo.status === 'demo_cancelled' || demo.status === 'demo_no_show' || demo.status === 'demo_rescheduled_cancelled' || demo.status === 'demo_rescheduled_no_show') return 'can_reschedule';
+    if (demo.status === 'completed' || demo.status === 'rescheduled_completed') return 'completed';
+    if (demo.status === 'cancelled' || demo.status === 'no_show' || demo.status === 'rescheduled_cancelled' || demo.status === 'rescheduled_no_show') return 'can_reschedule';
     return 'in_progress';
   };
 
   // Check if subject can have a new demo
   const canAddDemo = (subject: string) => {
     const demo = existingDemos.find(d => d.subject === subject);
-    if (!demo) return true; // No demo exists, can add
+    if (!demo) return true;
     const status = demo.status;
-    // Can add new demo if previous one is completed, cancelled, or no-show
-    return status === 'demo_completed' || 
-           status === 'demo_cancelled' || 
-           status === 'demo_no_show' || 
-           status === 'demo_rescheduled_completed' ||
-           status === 'demo_rescheduled_cancelled' ||
-           status === 'demo_rescheduled_no_show';
+    return status === 'completed' || 
+           status === 'cancelled' || 
+           status === 'no_show' || 
+           status === 'rescheduled_completed' ||
+           status === 'rescheduled_cancelled' ||
+           status === 'rescheduled_no_show';
   };
 
   // Check if we can edit existing demo
@@ -128,7 +130,7 @@ export default function DemoLeadForm({ lead, onComplete, onCancel, teachers }: D
     const demo = existingDemos.find(d => d.subject === subject);
     if (!demo) return false;
     // Can edit all demos EXCEPT completed ones
-    return !(demo.status === 'demo_completed' || demo.status === 'demo_rescheduled_completed');
+    return !(demo.status === 'completed' || demo.status === 'rescheduled_completed');
   };
 
   const handleSubjectSelect = (subject: string) => {
@@ -147,7 +149,7 @@ export default function DemoLeadForm({ lead, onComplete, onCancel, teachers }: D
         board: existingDemo.board || lead.board || '',
         class: existingDemo.class || lead.class || '',
         subject: existingDemo.subject || '',
-        status: existingDemo.status || 'demo_scheduled',
+        status: existingDemo.status || 'scheduled',
         remarks: existingDemo.remarks || '',
         preferredTimeSlots: lead.preferredTimeSlots || '',
       });
@@ -163,7 +165,7 @@ export default function DemoLeadForm({ lead, onComplete, onCancel, teachers }: D
         board: existingDemo.board || lead.board || '',
         class: existingDemo.class || lead.class || '',
         subject: existingDemo.subject || '',
-        status: existingDemo.status || 'demo_scheduled',
+        status: existingDemo.status || 'scheduled',
         remarks: existingDemo.remarks || '',
         preferredTimeSlots: lead.preferredTimeSlots || '',
       });
@@ -178,7 +180,7 @@ export default function DemoLeadForm({ lead, onComplete, onCancel, teachers }: D
         board: lead.board || '',
         class: lead.class || '',
         subject: subject,
-        status: 'demo_scheduled',
+        status: 'scheduled',
         remarks: '',
         preferredTimeSlots: lead.preferredTimeSlots || '',
       });
@@ -218,7 +220,7 @@ export default function DemoLeadForm({ lead, onComplete, onCancel, teachers }: D
   };
 
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement> | { target: { name: string; value: string } }
   ) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -273,7 +275,7 @@ export default function DemoLeadForm({ lead, onComplete, onCancel, teachers }: D
         setSelectedSubject('');
         setTimeout(() => setSelectedSubject(formData.subject), 100);
         
-        if (formData.status === 'demo_completed' || formData.status === 'demo_rescheduled_completed') {
+        if (formData.status === 'completed' || formData.status === 'rescheduled_completed') {
           alert('Demo completed! You can now schedule demos for other subjects.');
         }
         
@@ -484,8 +486,9 @@ export default function DemoLeadForm({ lead, onComplete, onCancel, teachers }: D
                   <div>
                     <label className="block text-sm font-medium text-gray-700">Teacher</label>
                     <select
+                      name="teacher"
                       value={formData.teacher}
-                      onChange={(e) => handleChange('teacher', e.target.value)}
+                      onChange={handleChange}
                       className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                       required
                     >
@@ -546,14 +549,14 @@ export default function DemoLeadForm({ lead, onComplete, onCancel, teachers }: D
                       disabled={isFormReadOnly}
                       className="w-full px-3 py-2 border rounded text-sm focus:outline-none focus:ring-1 focus:ring-gray-400 disabled:bg-gray-100"
                     >
-                      <option value="demo_scheduled">Scheduled</option>
-                      <option value="demo_completed">Completed</option>
-                      <option value="demo_cancelled">Cancelled</option>
-                      <option value="demo_no_show">No Show</option>
-                      <option value="demo_rescheduled">Rescheduled</option>
-                      <option value="demo_rescheduled_cancelled">Rescheduled Cancelled</option>
-                      <option value="demo_rescheduled_completed">Rescheduled Completed</option>
-                      <option value="demo_rescheduled_no_show">Rescheduled No Show</option>
+                      <option value="scheduled">Scheduled</option>
+                      <option value="completed">Completed</option>
+                      <option value="cancelled">Cancelled</option>
+                      <option value="no_show">No Show</option>
+                      <option value="rescheduled">Rescheduled</option>
+                      <option value="rescheduled_cancelled">Rescheduled Cancelled</option>
+                      <option value="rescheduled_completed">Rescheduled Completed</option>
+                      <option value="rescheduled_no_show">Rescheduled No Show</option>
                     </select>
                   </div>
 

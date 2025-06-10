@@ -4,25 +4,29 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import EditEnrollmentForm from './EnrollmentEdit';
 import DemoLeadForm from '../../demo/components/demoForm';
-
+import { Search, Filter, X, Calendar } from 'lucide-react';
+import * as XLSX from 'xlsx';
+import { FilterPanel } from '@/app/components/FilterPanel';
+import { useFilter } from '@/context/FilterContext';
+import { exportToExcel } from '@/utils/excelExport';
 
 interface Enrollment {
   _id: string;
-  lead:string;
   studentName: string;
-  phoneNumber: string;
-  parentsPhoneNumbers: string[];
+  studentPhone: string;
+  parentPhone: string;
   email: string;
-  age: number;
-  city: string;
-  address: string;
+  board: string;
+  class: string;
+  subjects: string[];
+  status: string;
   counsellor: string;
-  studentUsername: string;
-  password: string;
-  studentRating: number;
+  city: string;
+  studentId: string;
+  leadId: string;
+  lead?: any;
   createdAt: string;
   updatedAt: string;
-  status?: 'active' | 'inactive' | 'graduated' | 'dropped';
 }
 
 interface Lead {
@@ -46,6 +50,7 @@ interface Lead {
   counsellor: string;
   sessionEndDate: string;
   remarks: string;
+  city: string;
 }
 
 interface EnrollmentResponse {
@@ -63,68 +68,127 @@ interface Demo {
   board: string;
   class: string;
   subject: string;
-  status:
-    | "demo_scheduled"
-    | "demo_completed"
-    | "demo_cancelled"
-    | "demo_no_show"
-    | "demo_rescheduled"
-    | "demo_rescheduled_cancelled"
-    | "demo_rescheduled_completed"
-    | "demo_rescheduled_no_show";
+  status: string;
   remarks: string[];
   createdAt: string;
   updatedAt: string;
 }
 
-interface DemoResponse {
-  success: boolean;
-  message: string;
-  demos?: Demo[];
-  lead?: {
-    studentName: string;
-    studentPhone: string;
-    parentPhone: string;
-    city: string;
-    email: string;
-    board: string;
-    class: string;
+interface Teacher {
+  _id: string;
+  name: string;
+  email: string;
+  phoneNumber: string;
+  board: string;
+  classes: string[];
+  subjects: string[];
+  isAvailable: boolean;
+  isLocked: boolean;
+}
+
+interface DemoCount {
+  count: number;
+  demos: Demo[];
+}
+
+interface FilterState {
+  searchQuery: string;
+  statusFilter: string;
+  dateRange: {
+    startDate: string;
+    endDate: string;
   };
+  monthFilter: string;
+  yearFilter: string;
+  boardFilter: string;
+  classFilter: string;
+  subjectFilter: string;
 }
 
 export default function EnrollmentList() {
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'all' | 'active' | 'inactive' | 'graduated' | 'dropped'>('all');
-  // const [deleteLoading, setDeleteLoading] = useState<string | null>(null);
-  const [editingEnrollment, setEditingEnrollment] = useState<Enrollment | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState<string | null>(null);
+  const [selectedEnrollment, setSelectedEnrollment] = useState<Enrollment | null>(null);
   const [showEditForm, setShowEditForm] = useState(false);
-  
-  // Demo form states
+  const [showAddForm, setShowAddForm] = useState(false);
   const [showDemoForm, setShowDemoForm] = useState(false);
   const [selectedEnrollmentForDemo, setSelectedEnrollmentForDemo] = useState<Enrollment | null>(null);
-  const [leadDataForDemo, setLeadDataForDemo] = useState<Lead | null>(null);
-  const [loadingLeadData, setLoadingLeadData] = useState(false);
-  
+  const [teachers, setTeachers] = useState<Teacher[]>([]);
+  const [demoCounts, setDemoCounts] = useState<Record<string, number>>({});
+  const [dateRange, setDateRange] = useState<{ start: string; end: string }>({
+    start: new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0],
+    end: new Date().toISOString().split('T')[0]
+  });
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [boardFilter, setBoardFilter] = useState<string>("all");
+  const [classFilter, setClassFilter] = useState<string>("all");
+  const [subjectFilter, setSubjectFilter] = useState<string>("all");
+  const [monthFilter, setMonthFilter] = useState<string>("all");
+  const [yearFilter, setYearFilter] = useState<string>("all");
+
   const baseUrl = process.env.BASE_URL;
 
-  // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
-  const router = useRouter();
+
+  const {
+    filterState,
+    setSearchQuery: setFilterSearchQuery,
+    setDateRange: setFilterDateRange,
+    setMonthFilter: setFilterMonthFilter,
+    setYearFilter: setFilterYearFilter,
+    setBoardFilter: setFilterBoardFilter,
+    setClassFilter: setFilterClassFilter,
+    setSubjectFilter: setFilterSubjectFilter,
+    setStatusFilter,
+    setQuickMonthSelection: setFilterQuickMonthSelection,
+    setCurrentPage: setFilterCurrentPage,
+    clearAllFilters: clearFilterAllFilters,
+    hasActiveFilters: filterHasActiveFilters,
+  } = useFilter();
 
   useEffect(() => {
     fetchEnrollments();
-  }, [activeTab]);
+  }, [filterState.statusFilter]);
+
+  const fetchDemoCounts = async (leadIds: string[]) => {
+    try {
+      // First check if we have any lead IDs
+      if (!leadIds.length) return;
+
+      // Create a map to store demo counts
+      const demoCountMap: Record<string, number> = {};
+      
+      // Fetch demos for each lead ID
+      for (const leadId of leadIds) {
+        try {
+          const response = await fetch(`${baseUrl}/api/demo/view/${leadId}`);
+          if (!response.ok) continue;
+          
+          const data = await response.json();
+          if (data.success && data.demos) {
+            demoCountMap[leadId] = data.demos.length;
+          }
+        } catch (error) {
+          console.error(`Error fetching demos for lead ${leadId}:`, error);
+        }
+      }
+      
+      setDemoCounts(demoCountMap);
+    } catch (error) {
+      console.error('Error fetching demo counts:', error);
+    }
+  };
 
   const fetchEnrollments = async () => {
     try {
       setIsLoading(true);
       setError(null);
       
-      const url = `${baseUrl}/api/students${activeTab !== 'all' ? `?status=${activeTab}` : ''}`;
+      const url = `${baseUrl}/api/students${filterState.statusFilter !== 'all' ? `?status=${filterState.statusFilter}` : ''}`;
       console.log('Fetching enrollments from:', url);
       
       const response = await fetch(url);
@@ -141,12 +205,19 @@ export default function EnrollmentList() {
       console.log('Response data:', dataEnroll);
       
       // Handle both array response and success/message/data structure
+      let enrollmentsData: Enrollment[] = [];
       if (Array.isArray(dataEnroll)) {
-        setEnrollments(dataEnroll);
+        enrollmentsData = dataEnroll;
       } else if (dataEnroll.success && dataEnroll.data) {
-        setEnrollments(dataEnroll.data);
-      } else {
-        setEnrollments([]);
+        enrollmentsData = dataEnroll.data;
+      }
+      
+      setEnrollments(enrollmentsData);
+      
+      // Fetch demo counts for all leads
+      const leadIds = enrollmentsData.map(e => e.lead).filter(Boolean);
+      if (leadIds.length > 0) {
+        await fetchDemoCounts(leadIds);
       }
     } catch (error) {
       console.error('Error fetching enrollments:', error);
@@ -156,95 +227,73 @@ export default function EnrollmentList() {
     }
   };
 
-  // const handleDeleteEnrollment = async (enrollmentId: string) => {
-  //   if (!confirm('Are you sure you want to delete this enrollment? This action cannot be undone.')) {
-  //     return;
-  //   }
+  const handleDelete = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this enrollment? This action cannot be undone.')) {
+      return;
+    }
 
-  //   try {
-  //     setDeleteLoading(enrollmentId);
-  //     const response = await fetch(`${baseUrl}/api/students/${enrollmentId}`, {
-  //       method: 'DELETE',
-  //     });
+    setDeleteLoading(id);
+    try {
+      const response = await fetch(`${baseUrl}/api/students/${id}`, {
+        method: 'DELETE',
+      });
 
-  //     const data = await response.json();
-  //     if (data.success) {
-  //       setEnrollments(prevEnrollments => prevEnrollments.filter(enrollment => enrollment._id !== enrollmentId));
-  //       alert('Enrollment deleted successfully');
-  //     } else {
-  //       alert(data.message || 'Failed to delete enrollment');
-  //     }
-  //   } catch (error) {
-  //     console.error('Error deleting enrollment:', error);
-  //     alert('An error occurred while deleting the enrollment');
-  //   } finally {
-  //     setDeleteLoading(null);
-  //   }
-  // };
-
-  const handleEditClick = (enrollment: Enrollment) => {
-    setEditingEnrollment(enrollment);
-    setShowEditForm(true);
+      const data = await response.json();
+      if (data.success) {
+        setEnrollments(prevEnrollments => prevEnrollments.filter(enrollment => enrollment._id !== id));
+        alert('Enrollment deleted successfully');
+      } else {
+        alert(data.message || 'Failed to delete enrollment');
+      }
+    } catch (error) {
+      console.error('Error deleting enrollment:', error);
+      alert('An error occurred while deleting the enrollment');
+    } finally {
+      setDeleteLoading(null);
+    }
   };
 
-  const handleEditComplete = () => {
-    setEditingEnrollment(null);
+  const handleEditClick = async (enrollment: Enrollment) => {
+    // Navigate to the edit page
+    window.location.href = `/enrollment/edit/${enrollment._id}`;
+  };
+
+  const handleEditComplete = async () => {
+    await fetchEnrollments();
     setShowEditForm(false);
-    fetchEnrollments();
+    setSelectedEnrollment(null);
   };
 
   const handleEditCancel = () => {
-    setEditingEnrollment(null);
     setShowEditForm(false);
-  };
-
-  // Fetch lead data for demo form
-  const fetchLeadData = async (leadId: string): Promise<Lead | null> => {
-    try {
-      setLoadingLeadData(true);
-      const response = await fetch(`${baseUrl}/api/leads/${leadId}`);
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch lead data');
-      }
-      
-      const data = await response.json();
-      
-      if (data.success && data.lead) {
-        return data.lead;
-      } else {
-        throw new Error(data.message || 'Lead not found');
-      }
-    } catch (error) {
-      console.error('Error fetching lead data:', error);
-      alert('Failed to load lead data for demo form');
-      return null;
-    } finally {
-      setLoadingLeadData(false);
-    }
+    setSelectedEnrollment(null);
   };
 
   // Demo form handlers
   const handleBookDemoClick = async (enrollment: Enrollment) => {
-    setSelectedEnrollmentForDemo(enrollment);
-    
-    // Fetch the lead data using the enrollment's lead ID
-    const leadData = await fetchLeadData(enrollment.lead);
-    
-    if (leadData) {
-      setLeadDataForDemo(leadData);
-      setShowDemoForm(true);
-    } else {
-      // If we can't fetch lead data, create a mock lead object from enrollment data
-      const mockLead: Lead = {
-        _id: enrollment.lead,
+    try {
+      setIsLoading(true);
+      setSelectedEnrollmentForDemo(enrollment);
+      
+      // Fetch teachers for the demo - use the first subject if available
+      const subject = enrollment.subjects?.[0] || '';
+      const teachersResponse = await fetch(`${baseUrl}/api/teachers?board=${enrollment.board}&class=${enrollment.class}&subject=${subject}`);
+      const teachersData = await teachersResponse.json();
+      
+      if (teachersData.success && teachersData.teachers) {
+        setTeachers(teachersData.teachers);
+      }
+      
+      // Create a lead object from enrollment data
+      const leadData: Lead = {
+        _id: enrollment.leadId || enrollment._id,
         studentName: enrollment.studentName,
-        studentPhone: enrollment.phoneNumber,
-        parentPhone: enrollment.parentsPhoneNumbers[0] || '',
+        studentPhone: enrollment.studentPhone,
+        parentPhone: enrollment.parentPhone,
         email: enrollment.email,
-        board: '', // You might need to add this to enrollment data
-        class: '', // You might need to add this to enrollment data
-        subjects: [], // You might need to add this to enrollment data
+        board: enrollment.board,
+        class: enrollment.class,
+        subjects: enrollment.subjects || [],
         status: 'enrolled',
         notes: '',
         createdAt: enrollment.createdAt,
@@ -256,17 +305,25 @@ export default function EnrollmentList() {
         preferredTimeSlots: '',
         counsellor: enrollment.counsellor,
         sessionEndDate: '',
-        remarks: ''
+        remarks: '',
+        city: enrollment.city || ''
       };
       
-      setLeadDataForDemo(mockLead);
+      setSelectedEnrollmentForDemo({
+        ...enrollment,
+        lead: leadData
+      });
       setShowDemoForm(true);
+    } catch (error) {
+      console.error('Error preparing demo form:', error);
+      alert('Failed to prepare demo form. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleDemoComplete = () => {
     setSelectedEnrollmentForDemo(null);
-    setLeadDataForDemo(null);
     setShowDemoForm(false);
     // Optionally refresh enrollments if needed
     // fetchEnrollments();
@@ -274,29 +331,115 @@ export default function EnrollmentList() {
 
   const handleDemoCancel = () => {
     setSelectedEnrollmentForDemo(null);
-    setLeadDataForDemo(null);
     setShowDemoForm(false);
   };
 
-  const filteredEnrollments = enrollments.filter((enrollment) => {
-    const searchLower = searchQuery.toLowerCase();
+  const filteredEnrollments = enrollments.filter(enrollment => {
+    const searchLower = filterState.searchQuery.toLowerCase();
     const studentName = enrollment.studentName?.toLowerCase() || '';
-    const phoneNumber = enrollment.phoneNumber || '';
+    const phoneNumber = enrollment.studentPhone || '';
     const email = enrollment.email?.toLowerCase() || '';
-    const studentUsername = enrollment.studentUsername?.toLowerCase() || '';
 
-    const matchesSearch =
+    const matchesSearch = 
       studentName.includes(searchLower) ||
-      phoneNumber.includes(searchQuery) ||
-      email.includes(searchLower) ||
-      studentUsername.includes(searchLower) ||
-      enrollment.parentsPhoneNumbers.some(phone => phone.includes(searchQuery));
+      phoneNumber.includes(searchLower) ||
+      email.includes(searchLower);
 
-    const matchesTab = activeTab === 'all' || 
-      (enrollment.status?.toLowerCase() === activeTab.toLowerCase());
+    const matchesStatus = 
+      filterState.statusFilter === "all" ||
+      (enrollment.status?.toLowerCase() === filterState.statusFilter.toLowerCase());
 
-    return matchesSearch && matchesTab;
+    // Date Range filter
+    const enrollmentDate = new Date(enrollment.createdAt);
+    const matchesDateRange = (
+      !filterState.dateRange.startDate || 
+      enrollmentDate >= new Date(filterState.dateRange.startDate) && 
+      (!filterState.dateRange.endDate || enrollmentDate <= new Date(filterState.dateRange.endDate + "T23:59:59"))
+    );
+
+    // Month filter
+    const enrollmentMonth = enrollmentDate.getMonth() + 1;
+    const matchesMonth = filterState.monthFilter === "all" || enrollmentMonth.toString() === filterState.monthFilter;
+
+    // Year filter 
+    const enrollmentYear = enrollmentDate.getFullYear();
+    const matchesYear = filterState.yearFilter === "all" || enrollmentYear.toString() === filterState.yearFilter;
+
+    // Board filter
+    const matchesBoard = filterState.boardFilter === "all" || enrollment.board === filterState.boardFilter;
+    
+    // Class filter
+    const matchesClass = filterState.classFilter === "all" || enrollment.class === filterState.classFilter;
+
+    // Subject filter
+    const matchesSubject = filterState.subjectFilter === "all" || 
+      (enrollment.subjects && enrollment.subjects.includes(filterState.subjectFilter));
+
+    return (
+      matchesSearch &&
+      matchesStatus &&
+      matchesDateRange &&
+      matchesMonth &&
+      matchesYear &&
+      matchesBoard &&
+      matchesClass &&
+      matchesSubject
+    );
   });
+
+  const months = [
+    { value: 'all', label: 'All Months' },
+    { value: '1', label: 'January' },
+    { value: '2', label: 'February' },
+    { value: '3', label: 'March' },
+    { value: '4', label: 'April' },
+    { value: '5', label: 'May' },
+    { value: '6', label: 'June' },
+    { value: '7', label: 'July' },
+    { value: '8', label: 'August' },
+    { value: '9', label: 'September' },
+    { value: '10', label: 'October' },
+    { value: '11', label: 'November' },
+    { value: '12', label: 'December' }
+  ];
+
+  const clearAllFilters = () => {
+    setFilterSearchQuery('');
+    setFilterDateRange({ 
+      startDate: new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0], 
+      endDate: new Date().toISOString().split('T')[0] 
+    });
+    setFilterMonthFilter('all');
+    setFilterYearFilter('all');
+    setFilterBoardFilter('all');
+    setFilterClassFilter('all');
+    setFilterSubjectFilter('all');
+    setFilterStatusFilter('all');
+    setShowAdvancedFilters(false);
+  };
+  
+  const resetFilters = () => {
+    clearAllFilters();
+    setShowAdvancedFilters(false);
+  };
+
+  const applyFilters = () => {
+    // Filters are applied in real-time, just close the panel
+    setShowAdvancedFilters(false);
+  };
+
+  const hasActiveFilters = () => {
+    return filterState.searchQuery || 
+           filterState.dateRange.startDate || 
+           filterState.dateRange.endDate || 
+           filterState.monthFilter !== 'all' || 
+           filterState.yearFilter !== 'all' || 
+           filterState.boardFilter !== 'all' || 
+           filterState.classFilter !== 'all' || 
+           filterState.subjectFilter !== 'all' || 
+           filterState.quickMonthSelection !== 'all' ||
+           filterState.statusFilter !== 'all';
+  };
 
   // Pagination logic
   const totalPages = Math.ceil(filteredEnrollments.length / itemsPerPage);
@@ -335,6 +478,40 @@ export default function EnrollmentList() {
     return stars;
   };
 
+  const handleExportExcel = () => {
+    const columns = [
+      { key: 'studentName', label: 'Student Name' },
+      { key: 'phoneNumber', label: 'Phone Number' },
+      { key: 'email', label: 'Email' },
+      { key: 'board', label: 'Board' },
+      { key: 'class', label: 'Class' },
+      { key: 'subject', label: 'Subject' },
+      { key: 'status', label: 'Status' },
+      { key: 'createdAt', label: 'Created At' }
+    ];
+
+    const data = filteredEnrollments.map(enrollment => ({
+      studentName: enrollment.studentName,
+      phoneNumber: enrollment.studentPhone,
+      email: enrollment.email,
+      board: enrollment.board,
+      class: enrollment.class,
+      subject: enrollment.subject,
+      status: enrollment.status,
+      createdAt: new Date(enrollment.createdAt).toLocaleDateString()
+    }));
+
+    exportToExcel(data, columns, {
+      filename: 'enrollments.xlsx',
+      sheetName: 'Enrollments'
+    });
+  };
+
+  // Get unique values for filters
+  const uniqueBoards = [...new Set(enrollments.map(enrollment => enrollment.board).filter(Boolean))];
+  const uniqueClasses = [...new Set(enrollments.map(enrollment => enrollment.class).filter(Boolean))];
+  const uniqueSubjects = [...new Set(enrollments.flatMap(enrollment => enrollment.subjects).filter(Boolean))];
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
@@ -353,13 +530,74 @@ export default function EnrollmentList() {
 
   return (
     <div className="space-y-6 text-black m-9">
+      {!showEditForm && !showDemoForm && (
+        <div className="flex justify-between items-center">
+          <h1 className="text-2xl font-bold">Enrollments</h1>
+          <button
+            onClick={handleExportExcel}
+            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+          >
+            Download Data
+          </button>
+        </div>
+      )}
+
+      {/* Filter Panel */}
+      {!showEditForm && !showDemoForm && (
+        <FilterPanel
+          showAdvancedFilters={showAdvancedFilters}
+          setShowAdvancedFilters={setShowAdvancedFilters}
+          months={months}
+          uniqueBoards={uniqueBoards}
+          uniqueClasses={uniqueClasses}
+          uniqueSubjects={uniqueSubjects}
+          statusOptions={[
+            { value: 'all', label: 'All Status' },
+            { value: 'active', label: 'Active' },
+            { value: 'inactive', label: 'Inactive' },
+            { value: 'graduated', label: 'Graduated' },
+            { value: 'dropped', label: 'Dropped' }
+          ]}
+          onApplyFilters={() => setShowAdvancedFilters(false)}
+        />
+      )}
+
+      {/* Status Tabs */}
+      {!showEditForm && !showDemoForm && (
+        <div className="border-b border-gray-200">
+          <nav className="-mb-px flex space-x-8">
+            {[
+              { key: 'all', label: 'All Students' },
+              { key: 'active', label: 'Active' },
+              { key: 'inactive', label: 'Inactive' },
+              { key: 'graduated', label: 'Graduated' },
+              { key: 'dropped', label: 'Dropped' }
+            ].map((tab) => (
+              <button
+                key={tab.key}
+                onClick={() => {
+                  setStatusFilter(tab.key);
+                  setFilterCurrentPage(1);
+                }}
+                className={`${
+                  filterState.statusFilter === tab.key
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </nav>
+        </div>
+      )}
+
       {/* Demo Form */}
-      {showDemoForm && leadDataForDemo ? (
+      {showDemoForm && selectedEnrollmentForDemo ? (
         <div className="bg-white rounded-lg shadow-lg p-6">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-2xl font-bold text-black">
-              Schedule Demo - {leadDataForDemo.studentName}
-              {loadingLeadData && <span className="text-sm text-gray-500 ml-2">(Loading...)</span>}
+              Schedule Demo - {selectedEnrollmentForDemo.studentName}
             </h2>
             <button
               onClick={handleDemoCancel}
@@ -370,16 +608,17 @@ export default function EnrollmentList() {
               </svg>
             </button>
           </div>
-          <DemoLeadForm 
-            lead={leadDataForDemo} 
-            onComplete={handleDemoComplete} 
-            onCancel={handleDemoCancel} 
+          <DemoLeadForm
+            lead={selectedEnrollmentForDemo.lead}
+            onComplete={handleDemoComplete}
+            onCancel={handleDemoCancel}
+            teachers={teachers}
           />
         </div>
       ) : 
       
       /* Edit Form */
-      showEditForm && editingEnrollment ? (
+      showEditForm && selectedEnrollment ? (
         <div className="bg-white rounded-lg shadow-lg p-6">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-2xl font-bold text-black">Edit Enrollment</h2>
@@ -392,54 +631,14 @@ export default function EnrollmentList() {
               </svg>
             </button>
           </div>
-          <EditEnrollmentForm studentId={editingEnrollment._id} onComplete={handleEditComplete} />
+          <EditEnrollmentForm
+            studentId={selectedEnrollment._id}
+            onComplete={handleEditComplete}
+            onCancel={handleEditCancel}
+          />
         </div>
       ) : (
         <>
-          {/* Search */}
-          <div className="flex space-x-4 text-black m-5">
-            <div className="flex-1">
-              <input
-                type="text"
-                placeholder="Search by name, phone, email, or username..."
-                value={searchQuery}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value);
-                  setCurrentPage(1);
-                }}
-                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-          </div>
-
-          {/* Status Tabs */}
-          <div className="border-b border-gray-200">
-            <nav className="-mb-px flex space-x-8 overflow-x-auto">
-              {[
-                { key: 'all', label: 'All Students' },
-                { key: 'active', label: 'Active' },
-                { key: 'inactive', label: 'Inactive' },
-                { key: 'graduated', label: 'Graduated' },
-                { key: 'dropped', label: 'Dropped' }
-              ].map((tab) => (
-                <button
-                  key={tab.key}
-                  onClick={() => {
-                    setActiveTab(tab.key as any);
-                    setCurrentPage(1);
-                  }}
-                  className={`${
-                    activeTab === tab.key
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </nav>
-          </div>
-
           {/* Results summary */}
           <div className="text-sm text-gray-600">
             Showing {startIndex + 1} to {Math.min(endIndex, filteredEnrollments.length)} of {filteredEnrollments.length} enrollments
@@ -453,19 +652,16 @@ export default function EnrollmentList() {
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Details</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Username</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rating</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Academic</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Enrolled</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Demos</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Book a Demo</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {currentEnrollments.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="px-6 py-4 text-center text-gray-500">
+                      <td colSpan={6} className="px-6 py-4 text-center text-gray-500">
                         No enrollments found
                       </td>
                     </tr>
@@ -474,27 +670,18 @@ export default function EnrollmentList() {
                       <tr key={enrollment._id}>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm font-medium text-gray-900">{enrollment.studentName}</div>
-                          <div className="text-sm text-gray-500">Age: {enrollment.age}</div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">Student: {enrollment.phoneNumber}</div>
                           <div className="text-sm text-gray-900">
-                            Parents: {enrollment.parentsPhoneNumbers.join(', ') || 'Not provided'}
+                            <div>Phone: {enrollment.studentPhone}</div>
+                            <div>Email: {enrollment.email}</div>
                           </div>
-                          <div className="text-sm text-gray-500">{enrollment.email}</div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">{enrollment.city}</div>
-                          <div className="text-sm text-gray-500">{enrollment.address}</div>
-                          <div className="text-sm text-gray-500">Counsellor: {enrollment.counsellor}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">{enrollment.studentUsername}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center">
-                            {getRatingStars(enrollment.studentRating)}
-                            <span className="ml-2 text-sm text-gray-600">({enrollment.studentRating}/5)</span>
+                          <div className="text-sm text-gray-900">
+                            <div>Board: {enrollment.board}</div>
+                            <div>Class: {enrollment.class}</div>
+                            <div>Subjects: {enrollment.subjects?.join(', ') || 'No subjects'}</div>
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -503,7 +690,11 @@ export default function EnrollmentList() {
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {new Date(enrollment.createdAt).toLocaleDateString('en-GB')}
+                          {demoCounts[enrollment.leadId] ? (
+                            <div className="font-medium">{demoCounts[enrollment.leadId]} demos</div>
+                          ) : (
+                            <span>0 demos</span>
+                          )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                           <div className="flex flex-col items-start gap-1">
@@ -513,16 +704,11 @@ export default function EnrollmentList() {
                             >
                               Edit
                             </button>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                          <div className="flex flex-col items-start gap-1">
                             <button
                               onClick={() => handleBookDemoClick(enrollment)}
-                              disabled={loadingLeadData}
-                              className="text-blue-600 hover:text-blue-900 disabled:opacity-50"
+                              className="text-blue-600 hover:text-blue-900"
                             >
-                              {loadingLeadData ? 'Loading...' : 'Demo'}
+                              Demo
                             </button>
                           </div>
                         </td>
@@ -535,7 +721,7 @@ export default function EnrollmentList() {
           </div>
 
           {/* Pagination */}
-          {totalPages > 1 && (
+          {filteredEnrollments.length > itemsPerPage && (
             <div className="flex items-center justify-between border-t border-gray-200 bg-white px-4 py-3 sm:px-6">
               <div className="flex flex-1 justify-between sm:hidden">
                 <button
@@ -590,7 +776,7 @@ export default function EnrollmentList() {
                     >
                       Next
                     </button>
-                    </nav>
+                  </nav>
                 </div>
               </div>
             </div>

@@ -209,6 +209,10 @@ const EditTeacherPage = () => {
     }
   };
 
+  const getCardTypeLabel = (type: 1 | 2) => {
+    return type === 1 ? 'Doubt Session' : 'One-to-One';
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-6xl mx-auto">
@@ -381,8 +385,18 @@ const EditTeacherPage = () => {
                   <h3 className="font-medium text-gray-900 mb-2 text-sm">
                     {card.classType === "special"
                       ? card.specialCourseName || "Special Course"
-                      : `${card.board} - ${card.className} - ${card.subject}`}
+                      : `${card.board} - ${card.className} - ${card.subject} `}
+
+<span className={`inline-block px-2 py-1 rounded text-xs font-medium ${
+                      card.type === 1 
+                        ? 'bg-blue-100 text-blue-800'
+                        : 'bg-purple-100 text-purple-800'
+                    }`}>
+                      {getCardTypeLabel(card.type)}
+                    </span>
                   </h3>
+
+                  
                 </div>
               ))}
             </div>
