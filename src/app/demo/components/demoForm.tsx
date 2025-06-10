@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -40,13 +39,23 @@ interface Demo {
   preferredTimeSlots: string;
 }
 
+interface Teacher {
+  _id: string;
+  name: string;
+  email: string;
+  phoneNumber: string;
+  isAvailable: boolean;
+  isLocked: boolean;
+}
+
 interface DemoLeadFormProps {
   lead: Lead;
   onComplete: () => void;
   onCancel: () => void;
+  teachers: Teacher[];
 }
 
-export default function DemoLeadForm({ lead, onComplete, onCancel }: DemoLeadFormProps) {
+export default function DemoLeadForm({ lead, onComplete, onCancel, teachers }: DemoLeadFormProps) {
   const [loading, setLoading] = useState(false);
   const [selectedSubject, setSelectedSubject] = useState('');
   const [existingDemos, setExistingDemos] = useState<Demo[]>([]);
@@ -364,7 +373,7 @@ export default function DemoLeadForm({ lead, onComplete, onCancel }: DemoLeadFor
         </div>
 
         {/* Main Content */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           {/* Left Panel - Subject Selection */}
           <div className="lg:col-span-1">
             <div className="bg-white rounded-lg shadow-sm border p-4">
@@ -472,21 +481,25 @@ export default function DemoLeadForm({ lead, onComplete, onCancel }: DemoLeadFor
               
               {selectedSubject ? (
                 <div className="space-y-4">
-                  {/* Teacher Field */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Teacher <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      name="teacher"
+                    <label className="block text-sm font-medium text-gray-700">Teacher</label>
+                    <select
                       value={formData.teacher}
-                      onChange={handleChange}
-                      disabled={isFormReadOnly}
+                      onChange={(e) => handleChange('teacher', e.target.value)}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                       required
-                      className="w-full px-3 py-2 border rounded text-sm focus:outline-none focus:ring-1 focus:ring-gray-400 disabled:bg-gray-100"
-                      placeholder="Enter teacher name"
-                    />
+                    >
+                      <option value="">Select a teacher</option>
+                      {teachers.map((teacher) => (
+                        <option 
+                          key={teacher._id} 
+                          value={teacher._id}
+                          disabled={!teacher.isAvailable || teacher.isLocked}
+                        >
+                          {teacher.name} {(!teacher.isAvailable || teacher.isLocked) ? '(Not Available)' : ''}
+                        </option>
+                      ))}
+                    </select>
                   </div>
 
                   {/* Date & Time Row */}

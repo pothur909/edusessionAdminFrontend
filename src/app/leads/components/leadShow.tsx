@@ -29,6 +29,20 @@ interface Demo {
   updatedAt: string;
 }
 
+interface Teacher {
+  _id: string;
+  name: string;
+  email: string;
+  phoneNumber: string;
+  isAvailable: boolean;
+  isLocked: boolean;
+}
+
+interface TeacherResponse {
+  teachers: Teacher[];
+  totalTeachers: number;
+}
+
 interface Lead {
   _id: string;
   studentName: string;
@@ -135,6 +149,8 @@ export default function LeadsList() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [teachers, setTeachers] = useState<Teacher[]>([]);
+  const [isLoadingTeachers, setIsLoadingTeachers] = useState(false);
   const [activeTab, setActiveTab] = useState<
     "all" | "new" | "contacted" | "converted" | "not_interested" | "follow_up"
     // | "demo_scheduled"
@@ -300,9 +316,39 @@ export default function LeadsList() {
     setShowEditForm(true);
   };
 
+  const fetchTeachers = async (board: string, className: string, subject: string) => {
+    try {
+      setIsLoadingTeachers(true);
+      const response = await fetch('http://localhost:6969/api/fetchTeacherByCardId', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          type: "1",
+          classType: "normal",
+          board,
+          className,
+          subject
+        })
+      });
+      const data: TeacherResponse = await response.json();
+      setTeachers(data.teachers);
+    } catch (error) {
+      console.error('Error fetching teachers:', error);
+    } finally {
+      setIsLoadingTeachers(false);
+    }
+  };
+
   const handleBookDemoClick = async (lead: Lead) => {
     try {
       console.log("Original lead data:", lead);
+      
+      // Fetch teachers when booking demo
+      if (lead.board && lead.class && lead.subjects && lead.subjects.length > 0) {
+        await fetchTeachers(lead.board, lead.class, lead.subjects[0]);
+      }
 
       // Initialize demo data with lead information
       const demoData: Partial<Demo> = {
@@ -365,6 +411,11 @@ export default function LeadsList() {
     try {
       console.log("Original lead data:", lead);
       setEnrollmentLoading(true);
+
+      // Fetch teachers when enrolling
+      if (lead.board && lead.class && lead.subjects && lead.subjects.length > 0) {
+        await fetchTeachers(lead.board, lead.class, lead.subjects[0]);
+      }
 
       // Fetch both enrollment and demo data in parallel
       try {
@@ -610,6 +661,44 @@ export default function LeadsList() {
               </svg>
             </button>
           </div>
+          {isLoadingTeachers ? (
+            <div className="flex justify-center items-center p-4">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+            </div>
+          ) : (
+            <div className="mb-6">
+              <h3 className="text-lg font-semibold mb-2">Available Teachers</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {teachers.map((teacher) => (
+                  <div
+                    key={teacher._id}
+                    className={`p-4 border rounded-lg ${
+                      teacher.isAvailable && !teacher.isLocked
+                        ? 'bg-green-50 border-green-200'
+                        : 'bg-gray-50 border-gray-200'
+                    }`}
+                  >
+                    <h4 className="font-medium">{teacher.name}</h4>
+                    <p className="text-sm text-gray-600">{teacher.email}</p>
+                    <p className="text-sm text-gray-600">{teacher.phoneNumber}</p>
+                    <div className="mt-2">
+                      <span
+                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          teacher.isAvailable && !teacher.isLocked
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-red-100 text-red-800'
+                        }`}
+                      >
+                        {teacher.isAvailable && !teacher.isLocked
+                          ? 'Available'
+                          : 'Not Available'}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <DemoLeadForm
             lead={editingLead}
             onComplete={() => {
@@ -621,6 +710,7 @@ export default function LeadsList() {
               setBookDemoForm(false);
               setEditingLead(null);
             }}
+            teachers={teachers}
           />
         </div>
       ) : showEnrollmentForm && editingLead ? (
@@ -651,10 +741,49 @@ export default function LeadsList() {
               </svg>
             </button>
           </div>
+          {isLoadingTeachers ? (
+            <div className="flex justify-center items-center p-4">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+            </div>
+          ) : (
+            <div className="mb-6">
+              <h3 className="text-lg font-semibold mb-2">Available Teachers</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {teachers.map((teacher) => (
+                  <div
+                    key={teacher._id}
+                    className={`p-4 border rounded-lg ${
+                      teacher.isAvailable && !teacher.isLocked
+                        ? 'bg-green-50 border-green-200'
+                        : 'bg-gray-50 border-gray-200'
+                    }`}
+                  >
+                    <h4 className="font-medium">{teacher.name}</h4>
+                    <p className="text-sm text-gray-600">{teacher.email}</p>
+                    <p className="text-sm text-gray-600">{teacher.phoneNumber}</p>
+                    <div className="mt-2">
+                      <span
+                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          teacher.isAvailable && !teacher.isLocked
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-red-100 text-red-800'
+                        }`}
+                      >
+                        {teacher.isAvailable && !teacher.isLocked
+                          ? 'Available'
+                          : 'Not Available'}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <EnrollmentForm
             lead={editingLead}
             onComplete={handleEnrollmentComplete}
             onCancel={handleEnrollmentCancel}
+            teachers={teachers}
           />
         </div>
       ) : (

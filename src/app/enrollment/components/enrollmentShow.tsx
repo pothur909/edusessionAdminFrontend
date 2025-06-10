@@ -98,7 +98,7 @@ export default function EnrollmentList() {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'all' | 'active' | 'inactive' | 'graduated' | 'dropped'>('all');
-  const [deleteLoading, setDeleteLoading] = useState<string | null>(null);
+  // const [deleteLoading, setDeleteLoading] = useState<string | null>(null);
   const [editingEnrollment, setEditingEnrollment] = useState<Enrollment | null>(null);
   const [showEditForm, setShowEditForm] = useState(false);
   
