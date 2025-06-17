@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import EditLeadForm from '../../components/leadEdit';
+import React from 'react';
 
 interface Lead {
   _id: string;
@@ -35,6 +36,7 @@ interface ApiResponse {
 }
 
 export default function EditLeadPage({ params }: { params: { id: string } }) {
+  const resolvedParams = React.use(params);
   const [lead, setLead] = useState<Lead | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
@@ -55,7 +57,7 @@ export default function EditLeadPage({ params }: { params: { id: string } }) {
         }
 
         // Find the specific lead by ID
-        const leadData = result.data.find((l: Lead) => l._id === params.id);
+        const leadData = result.data.find((l: Lead) => l._id === resolvedParams.id);
         if (!leadData) throw new Error('Lead not found');
         setLead(leadData);
       } catch (error) {
@@ -66,10 +68,10 @@ export default function EditLeadPage({ params }: { params: { id: string } }) {
       }
     };
 
-    if (params.id) {
+    if (resolvedParams.id) {
       fetchLead();
     }
-  }, [params.id, baseUrl]);
+  }, [resolvedParams.id, baseUrl]);
 
   const handleComplete = () => {
     router.push('/leads'); // Redirect back to leads list

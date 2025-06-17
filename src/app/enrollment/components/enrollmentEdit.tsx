@@ -292,33 +292,28 @@ export default function EditEnrollmentForm({ studentId, onComplete, onCancel }: 
   }
 }, [studentId]);
 
-// Optional: Add a debug function to test the endpoint manually
-// const debugSubjectFetch = async () => {
-//   try {
-//     console.log('=== DEBUG: Testing subject fetch ===');
-//     console.log('Student ID:', studentId);
-    
-//     const testUrl = `http://localhost:6969/api/subject/student/${studentId}`;
-//     console.log('Test URL:', testUrl);
-    
-//     const response = await fetch(testUrl);
-//     console.log('Response status:', response.status);
-//     console.log('Response ok:', response.ok);
-    
-//     if (response.ok) {
-//       const data = await response.json();
-//       console.log('Response data:', data);
-//     } else {
-//       const errorText = await response.text();
-//       console.log('Error response:', errorText);
-//     }
-//   } catch (error) {
-//     console.error('Debug fetch error:', error);
-//   }
-// };
+
+
   
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
+  // const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+  //   const { name, value } = e.target;
+
+  //   if (name === 'parentsPhoneNumbers') {
+  //     setFormData(prev => ({
+  //       ...prev,
+  //       parentsPhoneNumbers: value.split(',').map(phone => phone.trim()).filter(phone => phone !== '')
+  //     }));
+  //   } else if (name === 'age') {
+  //     setFormData(prev => ({ ...prev, [name]: parseInt(value) || 0 }));
+  //   } else if (name === 'studentRating') {
+  //     setFormData(prev => ({ ...prev, [name]: parseFloat(value) || 0 }));
+  //   } else {
+  //     setFormData(prev => ({ ...prev, [name]: value }));
+  //   }
+  // };
+
+      const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name, value} = e.target;
 
     if (name === 'parentsPhoneNumbers') {
       setFormData(prev => ({
@@ -326,12 +321,30 @@ export default function EditEnrollmentForm({ studentId, onComplete, onCancel }: 
         parentsPhoneNumbers: value.split(',').map(phone => phone.trim()).filter(phone => phone !== '')
       }));
     } else if (name === 'age') {
-      setFormData(prev => ({ ...prev, [name]: parseInt(value) || 0 }));
+      // Allow empty string or valid numbers
+      const numValue = value === '' ? '' : parseInt(value);
+      setFormData(prev => ({ ...prev, [name]: numValue === '' ? 0 : (isNaN(numValue as number) ? 0 : numValue) }));
     } else if (name === 'studentRating') {
-      setFormData(prev => ({ ...prev, [name]: parseFloat(value) || 0 }));
+      // Allow empty string or valid numbers
+      const numValue = value === '' ? '' : parseFloat(value);
+      setFormData(prev => ({ ...prev, [name]: numValue === '' ? 0 : (isNaN(numValue as number) ? 0 : numValue) }));
     } else {
       setFormData(prev => ({ ...prev, [name]: value }));
     }
+  };
+
+  // Custom number input handler for subjects
+  const handleNumberInputChange = (index: number, field: string, value: string) => {
+    let numValue: number;
+    
+    if (value === '') {
+      numValue = 0;
+    } else {
+      numValue = field.includes('classAmount') || field.includes('amountPaid') ? 
+        (parseFloat(value) || 0) : (parseInt(value) || 0);
+    }
+    
+    handleSubjectChange(index, field, numValue);
   };
 
   const validateForm = (): boolean => {
@@ -521,6 +534,19 @@ export default function EditEnrollmentForm({ studentId, onComplete, onCancel }: 
         <span className="text-sm text-blue-600 ml-2">(Student ID: {studentId})</span>
       </h2> */}
 
+            <style jsx>{`
+        /* Hide number input spinners */
+        input[type="number"]::-webkit-outer-spin-button,
+        input[type="number"]::-webkit-inner-spin-button {
+          -webkit-appearance: none;
+          margin: 0;
+        }
+        
+        input[type="number"] {
+          -moz-appearance: textfield;
+        }
+      `}</style>
+
       <form onSubmit={handleSubmit} className="space-y-6 text-black">
         {/* Student Details Section */}
         <div className="bg-gray-50 p-4 rounded-md">
@@ -575,12 +601,14 @@ export default function EditEnrollmentForm({ studentId, onComplete, onCancel }: 
               <input
                 type="number"
                 name="age"
-                value={formData.age}
+                // value={formData.age}
+                  value={formData.age === 0 ? '' : formData.age}
                 onChange={handleChange}
                 required
                 min="1"
                 max="25"
                 className="border p-3 rounded-md w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                style={{ MozAppearance: 'textfield' }}
               />
             </div>
             <div>
@@ -621,12 +649,14 @@ export default function EditEnrollmentForm({ studentId, onComplete, onCancel }: 
               <input
                 type="number"
                 name="studentRating"
-                value={formData.studentRating}
+                // value={formData.studentRating}
+                value={formData.studentRating === 0 ? '' : formData.studentRating}
                 onChange={handleChange}
                 min="0"
                 max="5"
                 step="0.1"
                 className="border p-3 rounded-md w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                           style={{ MozAppearance: 'textfield' }}
               />
             </div>
           </div>
@@ -734,9 +764,12 @@ export default function EditEnrollmentForm({ studentId, onComplete, onCancel }: 
                     <label className="block text-sm font-medium text-gray-700 mb-1">Classes Per Week</label>
                     <input
                       type="number"
-                      value={subject.numberOfClassesPerWeek}
+                      // value={subject.numberOfClassesPerWeek}
+                        value={subject.numberOfClassesPerWeek === 0 ? '' : subject.numberOfClassesPerWeek}
                       onChange={(e) => handleSubjectChange(index, 'numberOfClassesPerWeek', parseInt(e.target.value) || 0)}
-                      className="border p-2 rounded-md w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                       min="1"
+                      className="border p-2 rounded w-full"
+                      style={{ MozAppearance: 'textfield' }}
                     />
                   </div>
                   <div>
@@ -753,18 +786,26 @@ export default function EditEnrollmentForm({ studentId, onComplete, onCancel }: 
                     <label className="block text-sm font-medium text-gray-700 mb-1">Class Amount</label>
                     <input
                       type="number"
-                      value={subject.paymentDetails.classAmount}
+                      // value={subject.paymentDetails.classAmount}
+                       value={subject.paymentDetails.classAmount === 0 ? '' : subject.paymentDetails.classAmount}
                       onChange={(e) => handleSubjectChange(index, 'paymentDetails.classAmount', parseInt(e.target.value) || 0)}
                       className="border p-2 rounded-md w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        min="0"
+                      step="0.01"
+                      style={{ MozAppearance: 'textfield' }}
                     />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Amount Paid</label>
                     <input
                       type="number"
-                      value={subject.paymentDetails.amountPaid}
+                      // value={subject.paymentDetails.amountPaid}
+                     value={subject.paymentDetails.amountPaid === 0 ? '' : subject.paymentDetails.amountPaid}
                       onChange={(e) => handleSubjectChange(index, 'paymentDetails.amountPaid', parseInt(e.target.value) || 0)}
                       className="border p-2 rounded-md w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                       min="0"
+                      step="0.01"
+                      style={{ MozAppearance: 'textfield' }}
                     />
                   </div>
                 </div>

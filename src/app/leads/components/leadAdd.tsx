@@ -235,9 +235,9 @@ export default function LeadForm() {
     }
 
     // courseInterested: required, non-empty string
-    if (!formData.courseInterested) {
-      newErrors.courseInterested = "Course interested is required";
-    }
+    // if (!formData.courseInterested) {
+    //   newErrors.courseInterested = "Course interested is required";
+    // }
 
     // modeOfContact: required, enum check
     if (!formData.modeOfContact) {
@@ -249,17 +249,17 @@ export default function LeadForm() {
     }
 
     // counsellor: required, non-empty string
-    if (!formData.counsellor) {
-      newErrors.counsellor = "Counsellor is required";
-    }
+    // if (!formData.counsellor) {
+    //   newErrors.counsellor = "Counsellor is required";
+    // }
 
     // sessionEndDate: optional, but if present, must be a valid date string
-    if (formData.sessionEndDate) {
-      const date = new Date(formData.sessionEndDate);
-      if (isNaN(date.getTime())) {
-        newErrors.sessionEndDate = "Invalid session end date";
-      }
-    }
+    // if (formData.sessionEndDate) {
+    //   const date = new Date(formData.sessionEndDate);
+    //   if (isNaN(date.getTime())) {
+    //     newErrors.sessionEndDate = "Invalid session end date";
+    //   }
+    // }
 
     return newErrors;
   };

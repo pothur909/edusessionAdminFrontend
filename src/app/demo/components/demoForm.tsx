@@ -70,7 +70,7 @@ export default function DemoLeadForm({ lead, onComplete, onCancel, teachers }: D
 
   const [leadData, setLeadData] = useState<Lead>({
     ...lead,
-    subjects: lead.subjects || []
+    subjects: Array.isArray(lead.subjects) ? lead.subjects : []
   });
 
   const [formData, setFormData] = useState<Demo>({
@@ -90,14 +90,18 @@ export default function DemoLeadForm({ lead, onComplete, onCancel, teachers }: D
     fetchExistingDemos();
   }, []);
 
+  useEffect(() => {
+    console.log('Lead data:', leadData);
+    console.log('Subjects:', leadData.subjects);
+  }, [leadData]);
+
   const fetchExistingDemos = async () => {
     try {
       const response = await fetch(`${baseUrl}/api/demo/view/${lead._id}`);
       const data = await response.json();
       
-      if (data.success && data.demos) {
-        setExistingDemos(data.demos);
-      }
+      const demos = data.demos || [];
+      setExistingDemos(demos);
     } catch (error) {
       console.error('Error fetching demos:', error);
     }
@@ -418,7 +422,7 @@ export default function DemoLeadForm({ lead, onComplete, onCancel, teachers }: D
 
               {/* Subject List */}
               <div className="space-y-2 max-h-80 overflow-y-auto">
-                {leadData.subjects.map((subject, index) => {
+                {(leadData.subjects || []).map((subject, index) => {
                   const demoStatus = getSubjectDemoStatus(subject);
                   const isSelected = selectedSubject === subject;
                   

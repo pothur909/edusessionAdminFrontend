@@ -79,11 +79,61 @@ const STATUSES = [
 
 export default function EditLeadForm({ lead, onComplete }: EditLeadFormProps) {
   const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState(lead);
+  // const [formData, setFormData] = useState(lead);
   const [boardData, setBoardData] = useState<BoardData[]>([]);
   const [boardLoading, setBoardLoading] = useState(true);
   const [newRemark, setNewRemark] = useState('');
   const baseUrl = process.env.BASE_URL;
+
+    const [formData, setFormData] = useState(() => ({
+    ...lead,
+    sessionBeginDate: lead.sessionBeginDate ? formatDateForInput(lead.sessionBeginDate) : '',
+    sessionEndDate: lead.sessionEndDate ? formatDateForInput(lead.sessionEndDate) : '',
+  }));
+
+
+
+
+
+
+  // Helper function to format date for input field (YYYY-MM-DD)
+  function formatDateForInput(dateString: string): string {
+    if (!dateString) return '';
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return '';
+      return date.toISOString().split('T')[0];
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return '';
+    }
+  }
+
+  // Helper function to format date for display
+  function formatDateForDisplay(dateString: string): string {
+    if (!dateString) return '';
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return '';
+      return date.toLocaleDateString();
+    } catch (error) {
+      console.error('Error formatting date for display:', error);
+      return '';
+    }
+  }
+
+  // Helper function to format date for submission (ISO string)
+  function formatDateForSubmission(dateString: string): string {
+    if (!dateString) return '';
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return '';
+      return date.toISOString();
+    } catch (error) {
+      console.error('Error formatting date for submission:', error);
+      return '';
+    }
+  }
 
   // Fetch board data on component mount
   useEffect(() => {
@@ -186,17 +236,17 @@ export default function EditLeadForm({ lead, onComplete }: EditLeadFormProps) {
   };
 
   // Add this function before handleSubmit
-  const formatDateForDisplay = (dateString: string) => {
-    if (!dateString) return '';
-    const date = new Date(dateString);
-    return date.toISOString().split('T')[0];
-  };
+  // const formatDateForDisplay = (dateString: string) => {
+  //   if (!dateString) return '';
+  //   const date = new Date(dateString);
+  //   return date.toISOString().split('T')[0];
+  // };
 
-  const formatDateForSubmission = (dateString: string) => {
-    if (!dateString) return '';
-    const date = new Date(dateString);
-    return date.toISOString();
-  };
+  // const formatDateForSubmission = (dateString: string) => {
+  //   if (!dateString) return '';
+  //   const date = new Date(dateString);
+  //   return date.toISOString();
+  // };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -208,6 +258,10 @@ export default function EditLeadForm({ lead, onComplete }: EditLeadFormProps) {
         sessionEndDate: formData.sessionEndDate
           ? formatDateForSubmission(formData.sessionEndDate)
           : "",
+           sessionBeginDate: formData.sessionBeginDate
+          ? formatDateForSubmission(formData.sessionBeginDate)
+          : "",
+          
       };
 
       const response = await fetch(
@@ -545,8 +599,9 @@ export default function EditLeadForm({ lead, onComplete }: EditLeadFormProps) {
                   />
                 </div>
 
+
                 {/* Session Start date */}
-                <div>
+                {/* <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Session Begin Date
                   </label>
@@ -555,6 +610,25 @@ export default function EditLeadForm({ lead, onComplete }: EditLeadFormProps) {
                     <p className="text-xs text-gray-500 mt-1">
                     {formatDateForDisplay(formData.sessionBeginDate)}
                     </p>
+                  )}
+                </div> */}
+
+                 {/* Session Begin Date */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Session Begin Date
+                  </label>
+                  <input
+                    type="date"
+                    name="sessionBeginDate"
+                    value={formData.sessionBeginDate}
+                    onChange={handleDateChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                  {formData.sessionBeginDate && (
+                    <div className="text-xs text-gray-500 mt-1">
+                      Selected: {formatDateForDisplay(formData.sessionBeginDate)}
+                    </div>
                   )}
                 </div>
 
@@ -572,7 +646,7 @@ export default function EditLeadForm({ lead, onComplete }: EditLeadFormProps) {
                   />
                 </div> */}
 
-                <div>
+                {/* <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Session End Date
                   </label>
@@ -583,10 +657,28 @@ export default function EditLeadForm({ lead, onComplete }: EditLeadFormProps) {
                     onChange={handleChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
-                  {/* Debug info - remove in production */}
+                
                   {formData.sessionEndDate && (
                     <div className="text-xs text-gray-500 mt-1">
                       Selected: {formData.sessionEndDate}
+                    </div>
+                  )}
+                </div> */}
+
+                     <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Session End Date
+                  </label>
+                  <input
+                    type="date"
+                    name="sessionEndDate"
+                    value={formData.sessionEndDate}
+                    onChange={handleDateChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                  {formData.sessionEndDate && (
+                    <div className="text-xs text-gray-500 mt-1">
+                      Selected: {formatDateForDisplay(formData.sessionEndDate)}
                     </div>
                   )}
                 </div>

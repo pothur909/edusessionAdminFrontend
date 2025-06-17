@@ -382,8 +382,27 @@ export default function EnrollmentForm({ lead, onComplete, onCancel, teachers }:
     fetchData();
   }, [lead]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
+  // const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+  //   const { name, value} = e.target;
+
+  //   if (name === 'parentsPhoneNumbers') {
+  //     setFormData(prev => ({
+  //       ...prev,
+  //       parentsPhoneNumbers: value.split(',').map(phone => phone.trim()).filter(phone => phone !== '')
+  //     }));
+  //   } else if (name === 'age') {
+  //     setFormData(prev => ({ ...prev, [name]: parseInt(value) || 0 }));
+  //   } else if (name === 'studentRating') {
+  //     setFormData(prev => ({ ...prev, [name]: parseFloat(value) || 0 }));
+  //   } else {
+  //     setFormData(prev => ({ ...prev, [name]: value }));
+  //   }
+    
+      
+  // };
+  
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name, value} = e.target;
 
     if (name === 'parentsPhoneNumbers') {
       setFormData(prev => ({
@@ -391,12 +410,30 @@ export default function EnrollmentForm({ lead, onComplete, onCancel, teachers }:
         parentsPhoneNumbers: value.split(',').map(phone => phone.trim()).filter(phone => phone !== '')
       }));
     } else if (name === 'age') {
-      setFormData(prev => ({ ...prev, [name]: parseInt(value) || 0 }));
+      // Allow empty string or valid numbers
+      const numValue = value === '' ? '' : parseInt(value);
+      setFormData(prev => ({ ...prev, [name]: numValue === '' ? 0 : (isNaN(numValue as number) ? 0 : numValue) }));
     } else if (name === 'studentRating') {
-      setFormData(prev => ({ ...prev, [name]: parseFloat(value) || 0 }));
+      // Allow empty string or valid numbers
+      const numValue = value === '' ? '' : parseFloat(value);
+      setFormData(prev => ({ ...prev, [name]: numValue === '' ? 0 : (isNaN(numValue as number) ? 0 : numValue) }));
     } else {
       setFormData(prev => ({ ...prev, [name]: value }));
     }
+  };
+
+  // Custom number input handler for subjects
+  const handleNumberInputChange = (index: number, field: string, value: string) => {
+    let numValue: number;
+    
+    if (value === '') {
+      numValue = 0;
+    } else {
+      numValue = field.includes('classAmount') || field.includes('amountPaid') ? 
+        (parseFloat(value) || 0) : (parseInt(value) || 0);
+    }
+    
+    handleSubjectChange(index, field, numValue);
   };
 
   const generateUsername = () => {
@@ -606,6 +643,22 @@ export default function EnrollmentForm({ lead, onComplete, onCancel, teachers }:
 
   return (
     <div className="max-w-4xl mx-auto p-6 text-black">
+      
+      <style jsx>{`
+        /* Hide number input spinners */
+        input[type="number"]::-webkit-outer-spin-button,
+        input[type="number"]::-webkit-inner-spin-button {
+          -webkit-appearance: none;
+          margin: 0;
+        }
+        
+        input[type="number"] {
+          -moz-appearance: textfield;
+        }
+      `}</style>
+
+
+
       <h2 className="text-2xl font-bold mb-4">
         {isEditing ? 'Edit Student Enrollment' : 'Enroll Student'}
         {isEditing && <span className="text-sm text-green-600 ml-2">(Editing existing enrollment)</span>}
@@ -714,12 +767,14 @@ export default function EnrollmentForm({ lead, onComplete, onCancel, teachers }:
               <input
                 type="number"
                 name="age"
-                value={formData.age}
+                // value={formData.age}
+                value={formData.age === 0 ? '' : formData.age}
                 onChange={handleChange}
                 required
                 min="1"
                 max="25"
                 className="border p-3 rounded-md w-full"
+                style={{ MozAppearance: 'textfield' }}
               />
             </div>
             <div>
@@ -782,12 +837,15 @@ export default function EnrollmentForm({ lead, onComplete, onCancel, teachers }:
               <input
                 type="number"
                 name="studentRating"
-                value={formData.studentRating}
+                // value={formData.studentRating}
+                 value={formData.studentRating === 0 ? '' : formData.studentRating}
                 onChange={handleChange}
                 min="0"
                 max="5"
                 step="0.1"
-                className="border p-3 rounded-md w-full"
+                
+                 className="border p-3 rounded-md w-full"
+                style={{ MozAppearance: 'textfield' }}
               />
             </div>
           </div>
