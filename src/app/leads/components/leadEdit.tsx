@@ -52,6 +52,8 @@ interface Lead {
   sessionBeginDate: string;
   sessionEndDate: string;
   remarks: string[];
+  sessionType?: string;
+  subjectCounts?: any;
 }
 
 interface EditLeadFormProps {
@@ -89,6 +91,8 @@ export default function EditLeadForm({ lead, onComplete }: EditLeadFormProps) {
     ...lead,
     sessionBeginDate: lead.sessionBeginDate ? formatDateForInput(lead.sessionBeginDate) : '',
     sessionEndDate: lead.sessionEndDate ? formatDateForInput(lead.sessionEndDate) : '',
+    sessionType: lead.sessionType || '',
+    subjectCounts: lead.subjectCounts || {},
   }));
 
 
@@ -258,11 +262,16 @@ export default function EditLeadForm({ lead, onComplete }: EditLeadFormProps) {
         sessionEndDate: formData.sessionEndDate
           ? formatDateForSubmission(formData.sessionEndDate)
           : "",
-           sessionBeginDate: formData.sessionBeginDate
+        sessionBeginDate: formData.sessionBeginDate
           ? formatDateForSubmission(formData.sessionBeginDate)
           : "",
-          
       };
+
+      // Remove sessionType if it's empty or not a valid value
+      const validSessionTypes = ["doubt session", "1 to 1"];
+      if (!submissionData.sessionType || !validSessionTypes.includes(submissionData.sessionType)) {
+        delete submissionData.sessionType;
+      }
 
       const response = await fetch(
         `${baseUrl}/api/leads/editlead/${lead._id}`,
@@ -448,6 +457,50 @@ export default function EditLeadForm({ lead, onComplete }: EditLeadFormProps) {
                   </select>
                 </div>
 
+                {/* Session Type (read-only, only if leadSource is website) */}
+                {formData.leadSource === 'website' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Session Type
+                    </label>
+                    <input
+                      type="text"
+                      name="sessionType"
+                      value={formData.sessionType}
+                      readOnly
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-gray-100 text-gray-700 cursor-not-allowed"
+                    />
+                  </div>
+                )}
+
+                {/* Subject Counts (read-only, only if website + doubt session) */}
+                {formData.leadSource === 'website' && formData.sessionType === 'doubt session' && formData.subjectCounts && (
+                  <div className="mt-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Doubt Session Attended 
+                    </label>
+                    <div className="border border-gray-300 rounded-md p-3 bg-gray-50">
+                      {Object.keys(formData.subjectCounts).length === 0 && (
+                        <div className="text-gray-500 text-sm">No subject counts available.</div>
+                      )}
+                      {Object.entries(formData.subjectCounts).map(([board, classes]: [string, any]) =>
+                        Object.entries(classes).map(([className, subjects]: [string, any]) => (
+                          <div key={board + className} className="mb-2">
+                            <strong>{board} - Class {className}</strong>
+                            <ul className="ml-4 list-disc">
+                              {Object.entries(subjects).map(([subject, count]: [string, any]) => (
+                                <li key={subject} className="text-sm">
+                                  {subject}: {count}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {/* Course Interested */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -600,20 +653,7 @@ export default function EditLeadForm({ lead, onComplete }: EditLeadFormProps) {
                 </div>
 
 
-                {/* Session Start date */}
-                {/* <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Session Begin Date
-                  </label>
-                  
-                  {formData.sessionBeginDate && (
-                    <p className="text-xs text-gray-500 mt-1">
-                    {formatDateForDisplay(formData.sessionBeginDate)}
-                    </p>
-                  )}
-                </div> */}
-
-                 {/* Session Begin Date */}
+                {/* Session Begin Date */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Session Begin Date
@@ -633,39 +673,7 @@ export default function EditLeadForm({ lead, onComplete }: EditLeadFormProps) {
                 </div>
 
                 {/* Session End Date */}
-                {/* <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Session End Date
-                  </label>
-                  <input
-                    type="date"
-                    name="sessionEndDate"
-                    value={formData.sessionEndDate}
-                    onChange={handleChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div> */}
-
-                {/* <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Session End Date
-                  </label>
-                  <input
-                    type="date"
-                    name="sessionEndDate"
-                    value={formData.sessionEndDate}
-                    onChange={handleChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                
-                  {formData.sessionEndDate && (
-                    <div className="text-xs text-gray-500 mt-1">
-                      Selected: {formData.sessionEndDate}
-                    </div>
-                  )}
-                </div> */}
-
-                     <div>
+                <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Session End Date
                   </label>
