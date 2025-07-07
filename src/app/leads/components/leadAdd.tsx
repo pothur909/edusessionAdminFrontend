@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import * as XLSX from 'xlsx';
 
 export default function LeadForm() {
 
@@ -62,6 +63,7 @@ export default function LeadForm() {
   const [boardData, setBoardData] = useState<BoardData[]>([]);
   const [loading, setLoading] = useState(false);
   const [boardLoading, setBoardLoading] = useState(true);
+  const [excelFile, setExcelFile] = useState<File | null>(null);
 
   const baseUrl =process.env. BASE_URL;
 
@@ -163,6 +165,145 @@ export default function LeadForm() {
         };
       }
     });
+  };
+
+  // Modified Excel upload handler: just store the file
+  const handleExcelFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setExcelFile(e.target.files?.[0] || null);
+  };
+
+  // New function: process the file on Upload button click and submit to API (bulk upload)
+  const handleExcelUpload = async () => {
+    if (!excelFile) return;
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      const data = evt.target?.result;
+      if (!data) return;
+      const workbook = XLSX.read(data, { type: 'binary' });
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+      if (jsonData.length < 2) {
+        alert('Excel file must have at least two rows (header and data)');
+        return;
+      }
+      const header = jsonData[0] as string[];
+      const excelToFormMap: Record<string, keyof LeadData> = {
+        'Student Name': 'studentName',
+        'Student Phone': 'studentPhone',
+        'Parent Phone': 'parentPhone',
+        'Email': 'email',
+        'Board': 'board',
+        'Class': 'class',
+        'Subjects': 'subjects',
+        'Lead Source': 'leadSource',
+        'Classes Per Week': 'classesPerWeek',
+        'Course Interested': 'courseInterested',
+        'Mode Of Contact': 'modeOfContact',
+        'Preferred Time': 'preferredTimeSlots',
+        'Counsellor': 'counsellor',
+        'Session Begin Date': 'sesssionBeginDate',
+        'Session End Date': 'sessionEndDate',
+        'Remarks': 'remarks',
+        'Notes': 'notes',
+      };
+      // Map all data rows to lead objects
+      const leads: Partial<LeadData>[] = [];
+      for (let i = 1; i < jsonData.length; i++) {
+        const row = jsonData[i] as (string | number)[];
+        if (row.length === 0 || row.every(cell => cell === undefined || cell === null || cell === '')) continue;
+        const tempFormData: Partial<LeadData> = {};
+        header.forEach((col, idx) => {
+          const formKey = excelToFormMap[col];
+          if (!formKey) return;
+          const value = row[idx];
+          if (formKey === 'subjects' || formKey === 'remarks') {
+            tempFormData[formKey] = typeof value === 'string' ? value.split(',').map(s => s.trim()) : [];
+          } else if (formKey === 'classesPerWeek') {
+            tempFormData[formKey] = Number(value) || 1;
+          } else {
+            tempFormData[formKey] = value as string;
+          }
+        });
+        leads.push(tempFormData);
+      }
+      if (leads.length === 0) {
+        alert('No valid data rows found in the Excel file.');
+        return;
+      }
+      // POST to bulk API
+      try {
+        const response = await fetch(`${baseUrl}/api/leads/bulk-add`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(leads),
+        });
+        const result = await response.json();
+        if (!response.ok) {
+          throw new Error(result.message || 'Failed to bulk upload leads');
+        }
+        alert(result.message || `${leads.length} leads uploaded successfully!`);
+      } catch (error) {
+        console.error(error);
+        alert('Error uploading leads. Please check your data and try again.');
+      }
+      setExcelFile(null);
+      const fileInput = document.getElementById('excel-upload-input') as HTMLInputElement;
+      if (fileInput) fileInput.value = '';
+    };
+    reader.readAsBinaryString(excelFile);
+  };
+
+  // Excel template download function
+  const handleDownloadTemplate = () => {
+    const headers = [
+      'studentName',
+      'studentPhone',
+      'parentPhone',
+      'city',
+      'email',
+      'board',
+      'class',
+      'subjects',
+      'leadSource',
+      'classesPerWeek',
+      'preferredTimeSlots',
+      'courseInterested',
+      'modeOfContact',
+      'counsellor',
+      'sessionBeginDate',
+      'sessionEndDate',
+      'remarks',
+      'status',
+      'notes',
+      'assignedTo',
+    ];
+    const exampleRow = [
+      'John Doe',
+      '9876543210',
+      '9123456789',
+      'Delhi',
+      'john@example.com',
+      'CBSE',
+      '10',
+      'Math,Science',
+      'website',
+      3,
+      'Morning,Evening',
+      'Physics',
+      'phone',
+      'Counsellor Name',
+      '2024-07-01',
+      '2024-12-31',
+      'Remark1,Remark2',
+      'new',
+      'Some notes here',
+      '', // assignedTo (ObjectId, optional)
+    ];
+    const ws = XLSX.utils.aoa_to_sheet([headers, exampleRow]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Template');
+    XLSX.writeFile(wb, 'lead_form_template.xlsx');
   };
 
   const validate = () => {
@@ -326,6 +467,37 @@ export default function LeadForm() {
 
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
+      {/* Excel Template Download & Upload Section (outside the form) */}
+      <div className="max-w-2xl mx-auto bg-white p-6 rounded-lg shadow mb-8">
+        <button
+          type="button"
+          onClick={handleDownloadTemplate}
+          className="mb-2 bg-green-600 text-white py-2 px-4 rounded hover:bg-green-700 transition"
+        >
+          Download Excel Template
+        </button>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Excel Dump (Upload Excel to autofill)
+        </label>
+        <div className="flex items-center gap-2">
+          <input
+            id="excel-upload-input"
+            type="file"
+            accept=".xlsx,.xls"
+            onChange={handleExcelFileChange}
+            className="border border-gray-300 p-2 rounded-md"
+          />
+          <button
+            type="button"
+            onClick={handleExcelUpload}
+            disabled={!excelFile}
+            className="bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 transition disabled:opacity-50"
+          >
+            Upload
+          </button>
+        </div>
+        <p className="text-xs text-gray-500 mt-1">First row should be headers matching: Student Name, Student Phone, Parent Phone, Email, Board, Class, Subjects, Lead Source, Classes Per Week, Course Interested, Mode Of Contact, Preferred Time, Counsellor, Session Begin Date, Session End Date, Remarks, Notes</p>
+      </div>
       <form
         onSubmit={handleSubmit}
         className="max-w-2xl mx-auto bg-white p-8 rounded-lg shadow-md space-y-6 text-black"

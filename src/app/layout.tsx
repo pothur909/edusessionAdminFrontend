@@ -4,6 +4,7 @@ import './globals.css';
 import SideBar from './components/sideBar';
 import { FilterProvider } from '@/context/FilterContext';
 
+
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {

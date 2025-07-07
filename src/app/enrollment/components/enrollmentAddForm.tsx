@@ -475,18 +475,35 @@ export default function EnrollmentForm({ lead, onComplete, onCancel, teachers }:
 
   const createZoomMeeting = async (subject: Subject, studentName: string): Promise<Subject> => {
     try {
-      const response = await fetch(`${baseUrl}/api/zoom/permanent/create`, {
+      // Get the first time slot for the initial meeting
+      const firstTimeSlot = subject.timeSlots[0];
+      // Parse the time slot to get date and time
+      // Expected format: "Day HH:MM AM/PM" (e.g., "Monday 3:00 PM")
+      const [day, time] = firstTimeSlot.split(' ');
+      
+      // Get next occurrence of the specified day
+      const nextDate = getNextDayDate(day);
+      // Format the date as YYYY-MM-DD
+      const formattedDate = nextDate.toISOString().split('T')[0];
+
+      const response = await fetch(`${baseUrl}/api/zoom/create`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           topic: `${subject.subject} Class - ${studentName}`,
-          options: {
-            enableChat: true,
-            enableRecording: true
+          start_time: `${formattedDate}T${convertTo24Hour(time)}:00`,
+          duration: 60, // 1 hour duration
+          timezone: 'Asia/Kolkata',
+          settings: {
+            host_video: true,
+            participant_video: true,
+            join_before_host: false,
+            mute_upon_entry: true,
+            waiting_room: true,
+            enable_chat: true,
+            enable_recording: true
           }
-        })
+        }),
       });
 
       const data = await response.json();
@@ -507,6 +524,40 @@ export default function EnrollmentForm({ lead, onComplete, onCancel, teachers }:
       console.error('Error creating Zoom meeting:', error);
       throw error;
     }
+  };
+
+  // Helper function to get the next occurrence of a given day
+  const getNextDayDate = (dayName: string): Date => {
+    const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    const today = new Date();
+    const targetDay = days.indexOf(dayName.toLowerCase());
+    const todayDay = today.getDay();
+    
+    let daysUntilTarget = targetDay - todayDay;
+    if (daysUntilTarget <= 0) {
+      daysUntilTarget += 7;
+    }
+    
+    const nextDate = new Date();
+    nextDate.setDate(today.getDate() + daysUntilTarget);
+    return nextDate;
+  };
+
+  // Helper function to convert 12-hour time format to 24-hour format
+  const convertTo24Hour = (time12h: string): string => {
+    const [time, modifier] = time12h.split(' ');
+    let [hours, minutes] = time.split(':');
+    
+    let hoursNumber = parseInt(hours, 10);
+    
+    if (modifier === 'PM' && hoursNumber < 12) {
+      hoursNumber += 12;
+    }
+    if (modifier === 'AM' && hoursNumber === 12) {
+      hoursNumber = 0;
+    }
+    
+    return `${hoursNumber.toString().padStart(2, '0')}:${minutes}`;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -977,7 +1028,7 @@ export default function EnrollmentForm({ lead, onComplete, onCancel, teachers }:
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Amount Paid</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Amount Paid</label>
                     <input
                       type="number"
                       value={subject.paymentDetails.amountPaid}
