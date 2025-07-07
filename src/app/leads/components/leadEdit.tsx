@@ -44,7 +44,7 @@ interface Lead {
   createdAt: string;
   updatedAt: string;
   leadSource: string;
-  classesPerWeek: number;
+  classesPerWeek: string;
   courseInterested: string;
   modeOfContact: string;
   preferredTimeSlots: string;
@@ -87,13 +87,14 @@ export default function EditLeadForm({ lead, onComplete }: EditLeadFormProps) {
   const [newRemark, setNewRemark] = useState('');
   const baseUrl = process.env.BASE_URL;
 
-    const [formData, setFormData] = useState(() => ({
+    const [formData, setFormData] = useState<Lead>({
     ...lead,
     sessionBeginDate: lead.sessionBeginDate ? formatDateForInput(lead.sessionBeginDate) : '',
     sessionEndDate: lead.sessionEndDate ? formatDateForInput(lead.sessionEndDate) : '',
     sessionType: lead.sessionType || '',
     subjectCounts: lead.subjectCounts || {},
-  }));
+    classesPerWeek: lead.classesPerWeek || '',
+  });
 
 
 
@@ -321,6 +322,58 @@ export default function EditLeadForm({ lead, onComplete }: EditLeadFormProps) {
     }
   };
 
+  // 4. Update validation logic
+  const validate = () => {
+    const newErrors: Partial<Record<keyof Lead, string>> = {};
+    if (!formData.studentName) {
+      newErrors.studentName = "Student name is required";
+    } else if (formData.studentName.length < 3) {
+      newErrors.studentName = "Student name must be at least 3 characters";
+    }
+    if (!formData.studentPhone || !/^\+91\d{10}$/.test(formData.studentPhone)) {
+      newErrors.studentPhone = "Enter a valid 10-digit phone number (e.g., +911234567890)";
+    }
+    if (!formData.parentPhone || !/^\+91\d{10}$/.test(formData.parentPhone)) {
+      newErrors.parentPhone = "Enter a valid 10-digit phone number (e.g., +911234567890)";
+    }
+    if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      newErrors.email = "Invalid email address";
+    }
+
+    // Determine if academic course (require board/class/subjects)
+    const academicCourses = ['JEE', 'NEET', 'NDA', 'Others'];
+    const isAcademic = academicCourses.includes(formData.courseInterested);
+
+    if (isAcademic) {
+      if (!formData.board || formData.board === 'Not Applicable') {
+        newErrors.board = 'Board is required for academic courses.';
+      }
+      if (!formData.class) {
+        newErrors.class = 'Class is required for academic courses.';
+      }
+      if (!formData.subjects || formData.subjects.length === 0) {
+        newErrors.subjects = 'At least one subject is required for academic courses.';
+      }
+    }
+
+    // If not academic, do not require board/class/subjects
+
+    if (!formData.classesPerWeek || formData.classesPerWeek.trim() === "") {
+      newErrors.classesPerWeek = "Classes per week is required";
+    }
+    if (!formData.leadSource) {
+      newErrors.leadSource = "Lead source is required";
+    } else if (!LEAD_SOURCES.includes(formData.leadSource)) {
+      newErrors.leadSource = `Lead source must be one of: ${LEAD_SOURCES.join(", ")}`;
+    }
+    if (!formData.modeOfContact) {
+      newErrors.modeOfContact = "Mode of contact is required";
+    } else if (!MODES_OF_CONTACT.includes(formData.modeOfContact)) {
+      newErrors.modeOfContact = `Mode of contact must be one of: ${MODES_OF_CONTACT.join(", ")}`;
+    }
+    return newErrors;
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
       <div className="max-w-4xl mx-auto">
@@ -394,15 +447,29 @@ export default function EditLeadForm({ lead, onComplete }: EditLeadFormProps) {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Student Phone
                   </label>
-                  <input
-                    type="tel"
-                    name="studentPhone"
-                    value={formData.studentPhone}
-                    onChange={handleChange}
-                    placeholder="Enter student phone"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    required
-                  />
+                  <div className="flex">
+                    <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-gray-300 bg-gray-100 text-gray-600 text-sm">
+                      +91
+                    </span>
+                    <input
+                      type="text"
+                      name="studentPhone"
+                      value={formData.studentPhone.replace('+91', '')}
+                      onChange={e => {
+                        const digits = e.target.value.replace(/[^0-9]/g, '').slice(0, 10);
+                        setFormData(prev => ({
+                          ...prev,
+                          studentPhone: '+91' + digits
+                        }));
+                      }}
+                      className="w-full border border-gray-300 p-3 rounded-r-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="1234567890"
+                      maxLength={10}
+                    />
+                  </div>
+                  {/* {errors.studentPhone && (
+                    <p className="text-red-500 text-sm mt-1">{errors.studentPhone}</p>
+                  )} */}
                 </div>
 
                 {/* Parent Phone */}
@@ -410,15 +477,29 @@ export default function EditLeadForm({ lead, onComplete }: EditLeadFormProps) {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Parent Phone
                   </label>
-                  <input
-                    type="tel"
-                    name="parentPhone"
-                    value={formData.parentPhone}
-                    onChange={handleChange}
-                    placeholder="Enter parent phone"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    required
-                  />
+                  <div className="flex">
+                    <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-gray-300 bg-gray-100 text-gray-600 text-sm">
+                      +91
+                    </span>
+                    <input
+                      type="text"
+                      name="parentPhone"
+                      value={formData.parentPhone.replace('+91', '')}
+                      onChange={e => {
+                        const digits = e.target.value.replace(/[^0-9]/g, '').slice(0, 10);
+                        setFormData(prev => ({
+                          ...prev,
+                          parentPhone: '+91' + digits
+                        }));
+                      }}
+                      className="w-full border border-gray-300 p-3 rounded-r-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="1234567890"
+                      maxLength={10}
+                    />
+                  </div>
+                  {/* {errors.parentPhone && (
+                    <p className="text-red-500 text-sm mt-1">{errors.parentPhone}</p>
+                  )} */}
                 </div>
 
                 {/* Email */}
@@ -626,29 +707,12 @@ export default function EditLeadForm({ lead, onComplete }: EditLeadFormProps) {
                     Classes per Week
                   </label>
                   <input
-                    type="number"
+                    type="text"
                     name="classesPerWeek"
                     value={formData.classesPerWeek}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        [e.target.name]: e.target.value,
-                      })
-                    }
-                    onInput={(e: React.FormEvent<HTMLInputElement>) => {
-                      const value = Number(e.currentTarget.value);
-                      if (value > 7) {
-                        e.currentTarget.value = '7';
-                      }
-                      if (value < 1 && e.currentTarget.value !== "") {
-                        e.currentTarget.value = '1';
-                      }
-                    }}
-                    min="1"
-                    max="7"
-                    placeholder="Enter number of classes"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    required
+                    onChange={handleChange}
+                    className="w-full border border-gray-300 p-3 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="e.g. science-2, maths-3 or Flexible"
                   />
                 </div>
 

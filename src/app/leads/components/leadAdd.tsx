@@ -1,8 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
-export default function LeadForm() {
+export function LeadForm({ formData, setFormData, teachers }: {
+  formData: any,
+  setFormData: (data: any) => void,
+  teachers: any[],
+}) {
 
   interface BoardData {
     _id: {
@@ -28,7 +32,7 @@ export default function LeadForm() {
     class: string;
     subjects: string[];
     leadSource: string;
-    classesPerWeek: number;
+    classesPerWeek: string; // changed from number to string
     courseInterested: string;
     modeOfContact: string;
     preferredTimeSlots: string;
@@ -39,37 +43,30 @@ export default function LeadForm() {
     notes: string;
   }
 
-  const [formData, setFormData] = useState<LeadData>({
-    studentName: "",
-    studentPhone: "",
-    parentPhone: "",
-    email: "",
-    board: "",
-    class: "",
-    subjects: [],
-    leadSource: "",
-    classesPerWeek: 1,
-    courseInterested: "",
-    modeOfContact: "",
-    preferredTimeSlots: "",
-    counsellor: "",
-    sesssionBeginDate: "",
-    sessionEndDate: "",
-    remarks: [],
-    notes: "",
-  });
-
   const [boardData, setBoardData] = useState<BoardData[]>([]);
   const [loading, setLoading] = useState(false);
   const [boardLoading, setBoardLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [phoneExists, setPhoneExists] = useState(false);
+  const [phoneCheckLoading, setPhoneCheckLoading] = useState(false);
+  const phoneCheckTimeout = useRef<NodeJS.Timeout | null>(null);
 
-  const baseUrl =process.env. BASE_URL;
+  const baseUrl =process.env.BASE_URL;
 
   const [errors, setErrors] = useState<Partial<Record<keyof LeadData, string>>>({});
 
   // Constants
   const LEAD_SOURCES = ['website', 'referral', 'social_media', 'other'];
-  const MODES_OF_CONTACT = ['phone', 'whatsapp', 'email'];
+  const MODES_OF_CONTACT = ['phone', 'whatsapp', 'email', 'social_media'];
+  const COURSE_OPTIONS = [
+    'Spoken English',
+    'IELTS',
+    'JEE',
+    'NEET',
+    'NDA',
+    'Others',
+    'Not Applicable',
+  ];
 
   // Fetch board data on component mount
   useEffect(() => {
@@ -94,7 +91,8 @@ export default function LeadForm() {
 
   // Get available boards
   const getAvailableBoards = () => {
-    return boardData.map(board => board.board);
+    const boards = boardData.map(board => board.board);
+    return [...boards, 'Not Applicable'];
   };
 
   // Get available classes for selected board
@@ -120,7 +118,7 @@ export default function LeadForm() {
   ) => {
     const { name, value, type } = e.target;
 
-    setFormData((prev) => {
+    setFormData((prev: any) => {
       let newFormData;
 
       if (type === "number") {
@@ -131,8 +129,13 @@ export default function LeadForm() {
 
       // Reset class and subjects when board changes
       if (name === "board") {
+        if (value === "Not Applicable") {
+          newFormData.class = "";
+          newFormData.subjects = [];
+        } else {
         newFormData.class = "";
         newFormData.subjects = [];
+        }
       }
 
       // Reset subjects when class changes
@@ -145,7 +148,7 @@ export default function LeadForm() {
   };
 
   const handleSubjectChange = (subject: string) => {
-    setFormData((prev) => {
+    setFormData((prev: any) => {
       const currentSubjects = prev.subjects || [];
       const isSelected = currentSubjects.includes(subject);
 
@@ -153,7 +156,7 @@ export default function LeadForm() {
         // Remove subject
         return {
           ...prev,
-          subjects: currentSubjects.filter((s) => s !== subject),
+          subjects: currentSubjects.filter((s: string) => s !== subject),
         };
       } else {
         // Add subject
@@ -165,102 +168,55 @@ export default function LeadForm() {
     });
   };
 
+  // 4. Update validation logic
   const validate = () => {
     const newErrors: Partial<Record<keyof LeadData, string>> = {};
-
-    // studentName: required, min length 3
     if (!formData.studentName) {
       newErrors.studentName = "Student name is required";
     } else if (formData.studentName.length < 3) {
       newErrors.studentName = "Student name must be at least 3 characters";
     }
-
-    // studentPhone: required, exactly 10 digits
-    if (!formData.studentPhone) {
-      newErrors.studentPhone = "Student phone number is required";
-    } else if (!/^\d{10}$/.test(formData.studentPhone)) {
-      newErrors.studentPhone = "Student phone must be exactly 10 digits";
+    if (!formData.studentPhone || !/^\+91\d{10}$/.test(formData.studentPhone)) {
+      newErrors.studentPhone = "Enter a valid 10-digit phone number (e.g., +911234567890)";
     }
-
-    // parentPhone: required, exactly 10 digits
-    if (!formData.parentPhone) {
-      newErrors.parentPhone = "Parent phone number is required";
-    } else if (!/^\d{10}$/.test(formData.parentPhone)) {
-      newErrors.parentPhone = "Parent phone must be exactly 10 digits";
+    if (!formData.parentPhone || !/^\+91\d{10}$/.test(formData.parentPhone)) {
+      newErrors.parentPhone = "Enter a valid 10-digit phone number (e.g., +911234567890)";
     }
-
-    // email: optional, but if provided must be valid format
     if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
       newErrors.email = "Invalid email address";
     }
 
-    // board: required, must be one of enum values
-    if (!formData.board) {
-      newErrors.board = 'Board is required';
-    } else if (!getAvailableBoards().includes(formData.board)) {
-      newErrors.board = `Board must be one of: ${getAvailableBoards().join(', ')}`;
+    // Determine if academic course (require board/class/subjects)
+    const academicCourses = ['JEE', 'NEET', 'NDA', 'Others'];
+    const isAcademic = academicCourses.includes(formData.courseInterested);
+
+    if (isAcademic) {
+      if (!formData.board || formData.board === 'Not Applicable') {
+        newErrors.board = 'Board is required for academic courses.';
+      }
+      if (!formData.class) {
+        newErrors.class = 'Class is required for academic courses.';
+      }
+      if (!formData.subjects || formData.subjects.length === 0) {
+        newErrors.subjects = 'At least one subject is required for academic courses.';
+      }
     }
 
-    // class: required
-    if (!formData.class) {
-      newErrors.class = "Class is required";
-    }
+    // If not academic, do not require board/class/subjects
 
-    // subjects: required array with at least one item
-    if (
-      !formData.subjects ||
-      !Array.isArray(formData.subjects) ||
-      formData.subjects.length === 0
-    ) {
-      newErrors.subjects = "At least one subject is required";
+    if (!formData.classesPerWeek || formData.classesPerWeek.trim() === "") {
+      newErrors.classesPerWeek = "Classes per week is required";
     }
-
-    // leadSource: required, enum check
     if (!formData.leadSource) {
       newErrors.leadSource = "Lead source is required";
     } else if (!LEAD_SOURCES.includes(formData.leadSource)) {
-      newErrors.leadSource = `Lead source must be one of: ${LEAD_SOURCES.join(
-        ", "
-      )}`;
+      newErrors.leadSource = `Lead source must be one of: ${LEAD_SOURCES.join(", ")}`;
     }
-
-    // classesPerWeek: required, number between 1 and 7
-    if (
-      formData.classesPerWeek === undefined ||
-      formData.classesPerWeek === null
-    ) {
-      newErrors.classesPerWeek = "Classes per week is required";
-    } else if (formData.classesPerWeek < 1 || formData.classesPerWeek > 7) {
-      newErrors.classesPerWeek = "Classes per week must be between 1 and 7";
-    }
-
-    // courseInterested: required, non-empty string
-    // if (!formData.courseInterested) {
-    //   newErrors.courseInterested = "Course interested is required";
-    // }
-
-    // modeOfContact: required, enum check
     if (!formData.modeOfContact) {
       newErrors.modeOfContact = "Mode of contact is required";
     } else if (!MODES_OF_CONTACT.includes(formData.modeOfContact)) {
-      newErrors.modeOfContact = `Mode of contact must be one of: ${MODES_OF_CONTACT.join(
-        ", "
-      )}`;
+      newErrors.modeOfContact = `Mode of contact must be one of: ${MODES_OF_CONTACT.join(", ")}`;
     }
-
-    // counsellor: required, non-empty string
-    // if (!formData.counsellor) {
-    //   newErrors.counsellor = "Counsellor is required";
-    // }
-
-    // sessionEndDate: optional, but if present, must be a valid date string
-    // if (formData.sessionEndDate) {
-    //   const date = new Date(formData.sessionEndDate);
-    //   if (isNaN(date.getTime())) {
-    //     newErrors.sessionEndDate = "Invalid session end date";
-    //   }
-    // }
-
     return newErrors;
   };
 
@@ -271,57 +227,146 @@ export default function LeadForm() {
       setErrors(validationErrors);
       return;
     }
+    setLoading(true);
     try {
-      setLoading(true);
-      const response = await fetch(`${baseUrl}/api/leads/addlead`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(formData),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to submit lead");
+      let response, data;
+      if (formData._id) {
+        // Update existing lead
+        response = await fetch(`${baseUrl}/api/leads/editlead/${formData._id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formData),
+        });
+      } else {
+        // Create new lead
+        response = await fetch(`${baseUrl}/api/leads/addlead`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formData),
+        });
       }
-
-      const data = await response.json();
-      console.log("Lead submitted:", data);
-
-      // Reset form
-      setFormData({
-        studentName: "",
-        studentPhone: "",
-        parentPhone: "",
-        email: "",
-        board: "",
-        class: "",
-        subjects: [],
-        leadSource: "",
-        classesPerWeek: 1,
-        courseInterested: "",
-        modeOfContact: "",
-        counsellor: "",
-        sesssionBeginDate: "",
-        sessionEndDate: "",
-        preferredTimeSlots: "",
-        remarks: [],
-        notes: "",
-      });
-      setErrors({});
-
-      // Call success callback if provided
-      // if (onSuccess) {
-      //   onSuccess();
-      // }
-
-      alert("Form submitted successfully!");
+      data = await response.json();
+      if (response.status === 400 && data.message) {
+        alert(data.message);
+        setLoading(false);
+        return;
+      }
+      if (data && (data._id || (data.lead && data.lead._id))) {
+        alert('Form submitted successfully!');
+        // Reset form for new entry
+        resetFormState();
+      } else {
+        alert(data.message || 'Error submitting lead');
+      }
     } catch (error) {
-      console.error("Error submitting lead:", error);
-      alert("Something went wrong while submitting. Please try again.");
+      console.error('Error submitting lead:', error);
+      alert('Something went wrong while submitting. Please try again.');
     } finally {
       setLoading(false);
     }
+  };
+
+  // Save button handler
+  const handleSaveLead = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      console.log('Saving lead with:', formData);
+      let response, data;
+      if (formData._id) {
+        // Update existing lead
+        response = await fetch(`${baseUrl}/api/leads/editlead/${formData._id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formData),
+        });
+      } else {
+        // Create new lead
+        response = await fetch(`${baseUrl}/api/leads/addlead`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formData),
+        });
+      }
+      data = await response.json();
+      console.log('Lead save response:', data);
+      if (response.status === 400 && data.message) {
+        if (data.message.includes('Another lead with this phone number already exists')) {
+          alert('Another lead with this phone number already exists!');
+          setSaving(false);
+          return;
+        }
+        if (data.message.includes('already exists')) {
+          alert('Lead already exists with this phone number!');
+          setSaving(false);
+          return;
+        }
+      }
+      if (data && (data._id || (data.lead && data.lead._id))) {
+        setFormData((prev: any) => ({ ...prev, _id: data._id || (data.lead && data.lead._id) }));
+        alert('Lead saved!');
+      } else {
+        alert(data.message || 'Error saving lead');
+      }
+    } catch (err) {
+      console.error('Lead save error:', err);
+      alert('Error saving lead');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Live phone number check
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const digits = e.target.value.replace(/[^0-9]/g, '').slice(0, 10);
+    const value = '+91' + digits;
+    setFormData((prev: any) => ({ ...prev, studentPhone: value }));
+    setPhoneExists(false);
+    if (phoneCheckTimeout.current) clearTimeout(phoneCheckTimeout.current);
+    if (digits.length === 10) {
+      setPhoneCheckLoading(true);
+      phoneCheckTimeout.current = setTimeout(async () => {
+        try {
+          const res = await fetch(`${baseUrl}/api/leads/check-phone`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ studentPhone: value }),
+          });
+          const data = await res.json();
+          setPhoneExists(data.exists);
+        } catch {
+          setPhoneExists(false);
+        } finally {
+          setPhoneCheckLoading(false);
+        }
+      }, 400);
+    }
+  };
+
+  // After successful submit, reset all relevant state for a fresh form
+  const resetFormState = () => {
+    setFormData({
+      studentName: "",
+      studentPhone: "",
+      parentPhone: "",
+      email: "",
+      board: "",
+      class: "",
+      subjects: [],
+      leadSource: "",
+      classesPerWeek: "",
+      courseInterested: "",
+      modeOfContact: "",
+      preferredTimeSlots: "",
+      counsellor: "",
+      sesssionBeginDate: "",
+      sessionEndDate: "",
+      remarks: [],
+      notes: "",
+    });
+    setErrors({});
+    setPhoneExists(false);
+    setPhoneCheckLoading(false);
   };
 
   return (
@@ -355,14 +400,25 @@ export default function LeadForm() {
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Student Phone
           </label>
-          <input
-            type="tel"
-            name="studentPhone"
-            value={formData.studentPhone}
-            onChange={handleChange}
-            className="w-full border border-gray-300 p-3 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            required
-          />
+          <div className="flex">
+            <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-gray-300 bg-gray-100 text-gray-600 text-sm">
+              +91
+            </span>
+            <input
+              type="text"
+              name="studentPhone"
+              value={formData.studentPhone.replace('+91', '')}
+              onChange={handlePhoneChange}
+              className="w-full border border-gray-300 p-3 rounded-r-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="1234567890"
+              maxLength={10}
+              disabled={!!formData._id}
+            />
+          </div>
+          {phoneCheckLoading && <p className="text-gray-500 text-sm mt-1">Checking phone number...</p>}
+          {phoneExists && (
+            <p className="text-red-500 text-sm mt-1">A lead with this phone number already exists. Please use a different number.</p>
+          )}
           {errors.studentPhone && (
             <p className="text-red-500 text-sm mt-1">{errors.studentPhone}</p>
           )}
@@ -373,14 +429,26 @@ export default function LeadForm() {
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Parent Phone
           </label>
-          <input
-            type="tel"
-            name="parentPhone"
-            value={formData.parentPhone}
-            onChange={handleChange}
-            className="w-full border border-gray-300 p-3 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            required
-          />
+          <div className="flex">
+            <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-gray-300 bg-gray-100 text-gray-600 text-sm">
+              +91
+            </span>
+            <input
+              type="text"
+              name="parentPhone"
+              value={formData.parentPhone.replace('+91', '')}
+              onChange={e => {
+                const digits = e.target.value.replace(/[^0-9]/g, '').slice(0, 10);
+                setFormData((prev: any) => ({
+                  ...prev,
+                  parentPhone: '+91' + digits
+                }));
+              }}
+              className="w-full border border-gray-300 p-3 rounded-r-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="1234567890"
+              maxLength={10}
+            />
+          </div>
           {errors.parentPhone && (
             <p className="text-red-500 text-sm mt-1">{errors.parentPhone}</p>
           )}
@@ -426,6 +494,7 @@ export default function LeadForm() {
         </div>
 
         {/* Class */}
+        {formData.board && formData.board !== 'Not Applicable' && (
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Class
@@ -449,8 +518,10 @@ export default function LeadForm() {
             <p className="text-red-500 text-sm mt-1">{errors.class}</p>
           )}
         </div>
+        )}
 
         {/* Subjects */}
+        {formData.board && formData.board !== 'Not Applicable' && (
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Subjects (Select multiple)
@@ -486,6 +557,7 @@ export default function LeadForm() {
             <p className="text-red-500 text-sm mt-1">{errors.subjects}</p>
           )}
         </div>
+        )}
 
         {/* Lead Source */}
         <div>
@@ -516,21 +588,12 @@ export default function LeadForm() {
             Classes per Week
           </label>
           <input
-            type="number"
+            type="text"
             name="classesPerWeek"
             value={formData.classesPerWeek}
-            onChange={(e) =>
-              setFormData({ ...formData, [e.target.name]: e.target.value })
-            }
-            onInput={(e) => {
-              const value = Number(e.target.value);
-              if (value > 7) {e.target.value = 7};
-              if (value < 1 && e.target.value !== "") {e.target.value = 1};
-            }}
-            min="1"
-            max="7"
+            onChange={handleChange}
             className="w-full border border-gray-300 p-3 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            
+            placeholder="e.g. Mon, Wed, Fri or Flexible or 3 per week"
           />
           {errors.classesPerWeek && (
             <p className="text-red-500 text-sm mt-1">{errors.classesPerWeek}</p>
@@ -542,14 +605,17 @@ export default function LeadForm() {
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Course Interested
           </label>
-          <input
-            type="text"
+          <select
             name="courseInterested"
             value={formData.courseInterested}
             onChange={handleChange}
             className="w-full border border-gray-300 p-3 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          
-          />
+          >
+            <option value="">Select Course</option>
+            {COURSE_OPTIONS.map((option) => (
+              <option key={option} value={option}>{option}</option>
+            ))}
+          </select>
           {errors.courseInterested && (
             <p className="text-red-500 text-sm mt-1">
               {errors.courseInterested}
@@ -573,6 +639,7 @@ export default function LeadForm() {
             <option value="phone">Phone</option>
             <option value="email">Email</option>
             <option value="whatsapp">WhatsApp</option>
+            <option value="social_media">Social Media</option>
           </select>
           {errors.modeOfContact && (
             <p className="text-red-500 text-sm mt-1">{errors.modeOfContact}</p>
@@ -680,14 +747,60 @@ export default function LeadForm() {
           />
         </div>
 
-        <button
-          type="submit"
-          className="w-full bg-blue-600 text-white py-3 px-6 rounded-md hover:bg-blue-700 transition duration-200 font-medium text-lg disabled:opacity-50 disabled:cursor-not-allowed"
-          disabled={loading}
-        >
-          {loading ? "Submitting..." : "Submit Lead"}
-        </button>
+        {/* Example: Use teachers in a dropdown (uncomment and place where needed) */}
+        {/* <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Teacher</label>
+          <select
+            name="teacher"
+            value={formData.teacher || ""}
+            onChange={handleChange}
+            className="w-full border border-gray-300 p-3 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          >
+            <option value="">Select Teacher</option>
+            {teachers.map((teacher) => (
+              <option key={teacher._id} value={teacher._id}>{teacher.name}</option>
+            ))}
+          </select>
+        </div> */}
+
+        {/* Disable the rest of the form if phoneExists is true */}
+        {phoneExists && (
+          <div className="mt-4 p-4 bg-red-100 text-red-700 rounded">
+            You cannot fill the form because a lead with this phone number already exists.
+          </div>
+        )}
+
+        <div className="flex gap-4">
+          <button
+            type="button"
+            className="bg-green-600 text-white py-3 px-6 rounded-md hover:bg-green-700 transition duration-200 font-medium text-lg disabled:opacity-50 disabled:cursor-not-allowed"
+            onClick={handleSaveLead}
+            disabled={saving || phoneExists}
+          >
+            {saving ? "Saving..." : "Save"}
+          </button>
+          {/* <button
+            type="submit"
+            className="bg-blue-600 text-white py-3 px-6 rounded-md hover:bg-blue-700 transition duration-200 font-medium text-lg disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={loading || phoneExists}
+          >
+            {loading ? "Submitting..." : "Submit Lead"}
+          </button> */}
+            {formData._id && (
+          <button
+            type="button"
+            className="bg-orange-400 text-white py-3 px-6 rounded-md hover:bg-orange-700 transition duration-200 font-medium text-lg"
+            onClick={resetFormState}
+          >
+            Create New Lead
+          </button>
+        )}
+        </div>
+      
       </form>
     </div>
   );
 }
+
+// Default export for backward compatibility
+export default LeadForm;

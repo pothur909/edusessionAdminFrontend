@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import EditLeadForm from '../../components/leadEdit';
 import React from 'react';
 
-interface Lead {
+interface LeadData {
   _id: string;
   studentName: string;
   studentPhone: string;
@@ -19,7 +19,7 @@ interface Lead {
   createdAt: string;
   updatedAt: string;
   leadSource: string;
-  classesPerWeek: number;
+  classesPerWeek: string;
   courseInterested: string;
   modeOfContact: string;
   preferredTimeSlots: string;
@@ -32,12 +32,12 @@ interface Lead {
 interface ApiResponse {
   success: boolean;
   message: string;
-  data: Lead[];
+  data: LeadData[];
 }
 
 export default function EditLeadPage({ params }: { params: { id: string } }) {
   const resolvedParams = React.use(params);
-  const [lead, setLead] = useState<Lead | null>(null);
+  const [lead, setLead] = useState<LeadData | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
   const baseUrl = process.env.BASE_URL || '';
@@ -57,7 +57,7 @@ export default function EditLeadPage({ params }: { params: { id: string } }) {
         }
 
         // Find the specific lead by ID
-        const leadData = result.data.find((l: Lead) => l._id === resolvedParams.id);
+        const leadData = result.data.find((l: LeadData) => l._id === resolvedParams.id);
         if (!leadData) throw new Error('Lead not found');
         setLead(leadData);
       } catch (error) {

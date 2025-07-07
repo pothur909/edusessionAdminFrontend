@@ -16,7 +16,7 @@ interface Lead {
   createdAt: string;
   updatedAt: string;
   leadSource: string;
-  classesPerWeek: number;
+  classesPerWeek: string; // changed from number to string if used for regular leads
   courseInterested: string;
   modeOfContact: string;
   preferredTimeSlots: string;
@@ -148,7 +148,7 @@ export default function EnrollmentForm({ lead, onComplete, onCancel, teachers }:
       board: lead.board || '',
       class: lead.class || '',
       subject: '',
-      numberOfClassesPerWeek: lead.classesPerWeek || 0,
+      numberOfClassesPerWeek: lead.classesPerWeek ? parseInt(lead.classesPerWeek, 10) : 0,
       teacher: '',
       timeSlots: [],
       paymentDetails: {
@@ -223,7 +223,7 @@ export default function EnrollmentForm({ lead, onComplete, onCancel, teachers }:
         board: lead.board || '',
         class: lead.class || '',
         subject: subject,
-        numberOfClassesPerWeek: lead.classesPerWeek || 0,
+        numberOfClassesPerWeek: lead.classesPerWeek ? parseInt(lead.classesPerWeek, 10) : 0,
         teacher: '',
         timeSlots: lead.preferredTimeSlots ? [lead.preferredTimeSlots] : [],
         paymentDetails: {
@@ -358,7 +358,7 @@ export default function EnrollmentForm({ lead, onComplete, onCancel, teachers }:
             board: lead.board || '',
             class: lead.class || '',
             subject: subject,
-            numberOfClassesPerWeek: lead.classesPerWeek || 0,
+            numberOfClassesPerWeek: lead.classesPerWeek ? parseInt(lead.classesPerWeek, 10) : 0,
             teacher: '',
             timeSlots: lead.preferredTimeSlots ? [lead.preferredTimeSlots] : [],
             paymentDetails: {

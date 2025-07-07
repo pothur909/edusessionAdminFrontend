@@ -54,7 +54,7 @@ interface Lead {
   createdAt: string;
   updatedAt: string;
   leadSource: string;
-  classesPerWeek: number;
+  classesPerWeek: string;
   courseInterested: string;
   modeOfContact: string;
   preferredTimeSlots: string;
@@ -335,7 +335,7 @@ export default function LeadsList() {
     try {
       setIsLoadingTeachers(true);
       const response = await fetch(
-        "http://localhost:6969/api/fetchTeacherByCardId",
+        "http://localhost:6969/api/session/fetchTeacherByCardId",
         {
           method: "POST",
           headers: {

@@ -17,6 +17,7 @@ interface Student {
   studentUsername: string;
   password: string;
   studentRating: number;
+  classesPerWeek: string; // changed from number to string if used for regular leads
 }
 
 export default function EditEnrollmentPage({ params }: { params: { id: string } }) {
