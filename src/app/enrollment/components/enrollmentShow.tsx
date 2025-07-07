@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import EditEnrollmentForm from './EnrollmentEdit';
+import EditEnrollmentForm from './enrollmentEdit';
 import DemoLeadForm from '../../demo/components/demoForm';
 import { Search, Filter, X, Calendar } from 'lucide-react';
 import * as XLSX from 'xlsx';
@@ -18,8 +18,7 @@ interface Enrollment {
   email: string;
   board: string;
   class: string;
-  subjects: string[];
-  status: string;
+  status: 'active' | 'inactive' | 'graduated' | 'dropped';
   counsellor: string;
   city: string;
   studentId: string;
@@ -27,30 +26,37 @@ interface Enrollment {
   lead?: any;
   createdAt: string;
   updatedAt: string;
-}
-
-interface Lead {
-  _id: string;
-  studentName: string;
-  studentPhone: string;
-  parentPhone: string;
-  email: string;
-  board: string;
-  class: string;
-  subjects: string[];
-  status: string;
-  notes: string;
-  createdAt: string;
-  updatedAt: string;
-  leadSource: string;
-  classesPerWeek: number;
-  courseInterested: string;
-  modeOfContact: string;
-  preferredTimeSlots: string;
-  counsellor: string;
-  sessionEndDate: string;
-  remarks: string;
-  city: string;
+  age?: number;
+  phoneNumber?: string;
+  parentsPhoneNumbers?: string[];
+  address?: string;
+  studentUsername?: string;
+  studentRating?: number;
+  subjects: {
+    _id?: string;
+    student: string;
+    board: string;
+    class: string;
+    subject: string;
+    numberOfClassesPerWeek: number;
+    teacher: string;
+    timeSlots: string[];
+    paymentDetails: {
+      classAmount: number;
+      amountPaid: number;
+      lastPayments: {
+        paymentId: string;
+        date: Date;
+        amount: number;
+      }[];
+    };
+    remarks: string[];
+    meetingDetails?: {
+      meetingId: string;
+      password: string;
+      joinUrl: string;
+    };
+  }[];
 }
 
 interface EnrollmentResponse {
@@ -105,6 +111,30 @@ interface FilterState {
   subjectFilter: string;
 }
 
+interface Lead {
+  _id: string;
+  studentName: string;
+  studentPhone: string;
+  parentPhone: string;
+  email: string;
+  board: string;
+  class: string;
+  subjects: string[];
+  status: string;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+  leadSource: string;
+  classesPerWeek: number;
+  courseInterested: string;
+  modeOfContact: string;
+  preferredTimeSlots: string;
+  counsellor: string;
+  sessionEndDate: string;
+  remarks: string;
+  city: string;
+}
+
 export default function EnrollmentList() {
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -113,6 +143,7 @@ export default function EnrollmentList() {
   const [deleteLoading, setDeleteLoading] = useState<string | null>(null);
   const [selectedEnrollment, setSelectedEnrollment] = useState<Enrollment | null>(null);
   const [showEditForm, setShowEditForm] = useState(false);
+  const [showViewModal, setShowViewModal] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [showDemoForm, setShowDemoForm] = useState(false);
   const [selectedEnrollmentForDemo, setSelectedEnrollmentForDemo] = useState<Enrollment | null>(null);
@@ -202,7 +233,7 @@ export default function EnrollmentList() {
       }
     
       const dataEnroll = await response.json();
-      console.log('Response data:', dataEnroll);
+      console.log('Fetched enrollments data:', dataEnroll);
       
       // Handle both array response and success/message/data structure
       let enrollmentsData: Enrollment[] = [];
@@ -212,6 +243,7 @@ export default function EnrollmentList() {
         enrollmentsData = dataEnroll.data;
       }
       
+      console.log('Processed enrollments data:', enrollmentsData);
       setEnrollments(enrollmentsData);
       
       // Fetch demo counts for all leads
@@ -254,6 +286,8 @@ export default function EnrollmentList() {
   };
 
   const handleEditClick = async (enrollment: Enrollment) => {
+    console.log('Edit Click - Full enrollment:', enrollment);
+    console.log('Edit Click - Subjects:', enrollment.subjects);
     // Navigate to the edit page
     window.location.href = `/enrollment/edit/${enrollment._id}`;
   };
@@ -332,6 +366,33 @@ export default function EnrollmentList() {
   const handleDemoCancel = () => {
     setSelectedEnrollmentForDemo(null);
     setShowDemoForm(false);
+  };
+
+  const handleViewClick = async (enrollment: Enrollment) => {
+    try {
+      // Fetch subjects for this student
+      const response = await fetch(`${baseUrl}/api/subject/student/${enrollment._id}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch subjects');
+      }
+      
+      const data = await response.json();
+      console.log('Fetched subjects data:', data);
+      
+      // Create a new enrollment object with the fetched subjects
+      const enrollmentWithSubjects = {
+        ...enrollment,
+        subjects: data.data || []
+      };
+      
+      setSelectedEnrollment(enrollmentWithSubjects);
+      setShowViewModal(true);
+    } catch (error) {
+      console.error('Error fetching subjects:', error);
+      // Fallback to the original enrollment data if fetch fails
+      setSelectedEnrollment(enrollment);
+      setShowViewModal(true);
+    }
   };
 
   const filteredEnrollments = enrollments.filter(enrollment => {
@@ -414,7 +475,7 @@ export default function EnrollmentList() {
     setFilterBoardFilter('all');
     setFilterClassFilter('all');
     setFilterSubjectFilter('all');
-    setFilterStatusFilter('all');
+    setStatusFilter('all');
     setShowAdvancedFilters(false);
   };
   
@@ -485,7 +546,7 @@ export default function EnrollmentList() {
       { key: 'email', label: 'Email' },
       { key: 'board', label: 'Board' },
       { key: 'class', label: 'Class' },
-      { key: 'subject', label: 'Subject' },
+      { key: 'subjects', label: 'Subjects' },
       { key: 'status', label: 'Status' },
       { key: 'createdAt', label: 'Created At' }
     ];
@@ -496,7 +557,7 @@ export default function EnrollmentList() {
       email: enrollment.email,
       board: enrollment.board,
       class: enrollment.class,
-      subject: enrollment.subject,
+      subjects: enrollment.subjects.map(s => s.subject).join(', '),
       status: enrollment.status,
       createdAt: new Date(enrollment.createdAt).toLocaleDateString()
     }));
@@ -699,11 +760,21 @@ export default function EnrollmentList() {
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                           <div className="flex flex-col items-start gap-1">
                             <button
+                              onClick={() => handleViewClick(enrollment)}
+                              className="text-blue-600 hover:text-blue-900"
+                            >
+                              View
+                            </button>
+                            <button
                               onClick={() => handleEditClick(enrollment)}
                               className="text-blue-600 hover:text-blue-900"
                             >
                               Edit
                             </button>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <div className="flex flex-col items-start gap-1">
                             <button
                               onClick={() => handleBookDemoClick(enrollment)}
                               className="text-blue-600 hover:text-blue-900"
@@ -782,6 +853,133 @@ export default function EnrollmentList() {
             </div>
           )}
         </>
+      )}
+
+      {showViewModal && selectedEnrollment && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-4/5 shadow-lg rounded-md bg-white">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-2xl font-bold text-gray-900">Enrollment Details</h3>
+              <button
+                onClick={() => {
+                  setShowViewModal(false);
+                  setSelectedEnrollment(null);
+                }}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4 mb-6">
+              <div>
+                <h4 className="font-semibold text-gray-700">Student Information</h4>
+                <p><span className="font-medium">Name:</span> {selectedEnrollment.studentName}</p>
+                <p><span className="font-medium">Phone:</span> {selectedEnrollment.studentPhone}</p>
+                <p><span className="font-medium">Parents Phone:</span> {selectedEnrollment.parentPhone}</p>
+                <p><span className="font-medium">Email:</span> {selectedEnrollment.email}</p>
+              </div>
+              <div>
+                <h4 className="font-semibold text-gray-700">Location Details</h4>
+                <p><span className="font-medium">City:</span> {selectedEnrollment.city}</p>
+                <p><span className="font-medium">Counsellor:</span> {selectedEnrollment.counsellor}</p>
+              </div>
+            </div>
+
+            <div className="mb-6">
+              <h4 className="font-semibold text-gray-700 mb-2">Account Information</h4>
+              <p><span className="font-medium">Status:</span> {selectedEnrollment.status || 'Active'}</p>
+              <p><span className="font-medium">Enrolled On:</span> {new Date(selectedEnrollment.createdAt).toLocaleDateString()}</p>
+            </div>
+
+            {selectedEnrollment.subjects && Array.isArray(selectedEnrollment.subjects) && selectedEnrollment.subjects.length > 0 ? (
+              <div>
+                <h4 className="font-semibold text-gray-700 mb-2">Subjects</h4>
+                <div className="space-y-4">
+                  {selectedEnrollment.subjects.map((subject, index) => (
+                    <div key={subject._id || index} className="border p-4 rounded-lg bg-gray-50">
+                      <h5 className="font-medium text-lg mb-2">{subject.subject}</h5>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <p><span className="font-medium">Board:</span> {subject.board}</p>
+                          <p><span className="font-medium">Class:</span> {subject.class}</p>
+                          <p><span className="font-medium">Classes per Week:</span> {subject.numberOfClassesPerWeek}</p>
+                          <p><span className="font-medium">Teacher:</span> {subject.teacher}</p>
+                        </div>
+                        <div>
+                          <p><span className="font-medium">Time Slots:</span></p>
+                          <ul className="list-disc list-inside">
+                            {subject.timeSlots?.map((slot, i) => (
+                              <li key={i} className="flex items-center gap-2">
+                                {slot}
+                                {subject.meetingDetails && (
+                                  <div className="flex items-center gap-1 ml-2">
+                                    <a 
+                                      href={subject.meetingDetails.joinUrl} 
+                                      target="_blank" 
+                                      rel="noopener noreferrer"
+                                      className="text-blue-600 hover:text-blue-800 text-sm"
+                                    >
+                                      Join Link
+                                    </a>
+                                    <button
+                                      onClick={() => {
+                                        if (subject.meetingDetails) {
+                                          navigator.clipboard.writeText(subject.meetingDetails.joinUrl);
+                                          alert('Link copied!');
+                                        }
+                                      }}
+                                      className="text-gray-600 hover:text-gray-800"
+                                      title="Copy Link"
+                                    >
+                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                                      </svg>
+                                    </button>
+                                  </div>
+                                )}
+                              </li>
+                            ))}
+                          </ul>
+                          <p><span className="font-medium">Class Amount:</span> ₹{subject.paymentDetails?.classAmount || 0}</p>
+                          <p><span className="font-medium">Amount Paid:</span> ₹{subject.paymentDetails?.amountPaid || 0}</p>
+                          {subject.paymentDetails?.lastPayments && subject.paymentDetails.lastPayments.length > 0 && (
+                            <div className="mt-2">
+                              <p className="font-medium">Last Payments:</p>
+                              <ul className="list-disc list-inside">
+                                {subject.paymentDetails.lastPayments.map((payment, i) => (
+                                  <li key={i}>
+                                    ₹{payment.amount} on {new Date(payment.date).toLocaleDateString()}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      {subject.remarks && subject.remarks.length > 0 && (
+                        <div className="mt-2">
+                          <p className="font-medium">Remarks:</p>
+                          <ul className="list-disc list-inside">
+                            {subject.remarks.map((remark, i) => (
+                              <li key={i}>{remark}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="text-gray-500 text-center py-4">
+                No subjects found for this enrollment.
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import EditEnrollmentForm from '../../components/EnrollmentEdit';
+import EditEnrollmentForm from '../../components/enrollmentEdit'
 
 interface Student {
   _id: string;

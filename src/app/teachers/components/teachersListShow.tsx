@@ -36,11 +36,27 @@ import EventIcon from '@mui/icons-material/Event';
 import CancelIcon from '@mui/icons-material/Cancel';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import AddIcon from '@mui/icons-material/Add';
+import InfoIcon from '@mui/icons-material/Info';
 import TeacherForm from '../addTeachers/page';
 import { useRouter } from 'next/navigation';
 import { useFilter } from '@/context/FilterContext';
 import { FilterPanel } from '@/app/components/FilterPanel';
 import { exportToExcel } from '@/utils/excelExport';
+
+interface InterviewDetails {
+  name: string;
+  email: string;
+  phoneNumber: string;
+  interviewDate: string;
+  interviewTime: string;
+  interviewerName: string;
+  interviewerEmail: string;
+  interviewerPhone: string;
+  meetingStartUrl: string;
+  meetingJoinUrl: string;
+  meetingId?: string;
+  meetingPassword?: string;
+}
 
 interface Teacher {
   _id: string;
@@ -60,6 +76,7 @@ interface Teacher {
   languages?: string[];
   additionalCourse?: string[];
   expectedSalary: string;
+  interviewDetails?: InterviewDetails;
 }
 
 function a11yProps(index: number) {
@@ -128,6 +145,8 @@ const TeachersListShow = () => {
   const [openAppointDialog, setOpenAppointDialog] = useState(false);
   const [teacherToAppoint, setTeacherToAppoint] = useState<Teacher | null>(null);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [openInterviewDetailsDialog, setOpenInterviewDetailsDialog] = useState(false);
+  const [selectedInterviewDetails, setSelectedInterviewDetails] = useState<InterviewDetails | null>(null);
 
   const baseUrl = process.env.BASE_URL || "http://localhost:6969";
 
@@ -338,26 +357,78 @@ const TeachersListShow = () => {
     if (!teacherToReject) return;
 
     try {
-      const response = await fetch(`${baseUrl}/api/teachers/${teacherToReject._id}`, {
-        method: 'PUT',
+      // First create a Zoom meeting
+      const zoomResponse = await fetch(`${baseUrl}/api/zoom/create`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          ...teacherToReject, 
-          status: 'interview',
-          interviewDetails: {
-            ...interviewForm,
-            interviewDateTime: `${interviewForm.interviewDate}T${interviewForm.interviewTime}`,
+        body: JSON.stringify({
+          topic: `Teacher Interview - ${teacherToReject.name}`,
+          instant: true,
+          options: {
+            enableChat: true,
+            enableRecording: true
           }
         }),
       });
 
+      if (!zoomResponse.ok) {
+        const errorData = await zoomResponse.json();
+        console.error("Zoom API Error:", errorData);
+        throw new Error('Failed to create Zoom meeting');
+      }
+
+      const zoomResponseData = await zoomResponse.json();
+      console.log("Complete Zoom API Response:", JSON.stringify(zoomResponseData, null, 2));
+
+      // Check if the response has the expected structure
+      if (!zoomResponseData.success || !zoomResponseData.data || !zoomResponseData.data.start_url || !zoomResponseData.data.join_url) {
+        console.error("Invalid Zoom API Response Structure:", zoomResponseData);
+        throw new Error('Invalid Zoom API response structure');
+      }
+
+      const zoomData = zoomResponseData.data;
+
+      // Now update the teacher with interview details and Zoom meeting info
+      const updateBody = { 
+        ...teacherToReject, 
+        status: 'interview',
+        interviewDetails: {
+          name: interviewForm.name,
+          email: interviewForm.email,
+          phoneNumber: interviewForm.phoneNumber,
+          interviewDate: interviewForm.interviewDate,
+          interviewTime: interviewForm.interviewTime,
+          interviewDateTime: `${interviewForm.interviewDate}T${interviewForm.interviewTime}`,
+          interviewerName: interviewForm.interviewerName,
+          interviewerEmail: interviewForm.interviewerEmail,
+          interviewerPhone: interviewForm.interviewerPhone,
+          meetingStartUrl: zoomData.start_url,
+          meetingJoinUrl: zoomData.join_url,
+          meetingId: zoomData.id,
+          meetingPassword: zoomData.password
+        }
+      };
+      
+      console.log("Teacher Update Request Body:", JSON.stringify(updateBody, null, 2));
+
+      const response = await fetch(`${baseUrl}/api/teachers/${teacherToReject._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updateBody),
+      });
+
       if (!response.ok) {
+        const errorData = await response.json();
+        console.error("Teacher Update Error:", errorData);
         throw new Error('Failed to schedule interview');
       }
 
+      const updatedTeacher = await response.json();
+      console.log("Updated Teacher Response:", JSON.stringify(updatedTeacher, null, 2));
+
       setSnackbar({
         open: true,
-        message: 'Interview scheduled successfully!',
+        message: 'Interview scheduled successfully with Zoom meeting!',
         severity: 'success'
       });
 
@@ -494,6 +565,18 @@ const TeachersListShow = () => {
   const handleCloseAppointDialog = () => {
     setOpenAppointDialog(false);
     setTeacherToAppoint(null);
+  };
+
+  const handleShowInterviewDetails = (teacher: Teacher) => {
+    if (teacher.interviewDetails) {
+      setSelectedInterviewDetails(teacher.interviewDetails);
+      setOpenInterviewDetailsDialog(true);
+    }
+  };
+
+  const handleCloseInterviewDetailsDialog = () => {
+    setOpenInterviewDetailsDialog(false);
+    setSelectedInterviewDetails(null);
   };
 
   if (loading) {
@@ -709,15 +792,27 @@ const TeachersListShow = () => {
                         </Tooltip>
                         {teacher.status !== 'contacted' && (
                           <>
-                            <Tooltip title="Schedule Interview">
-                              <IconButton 
-                                onClick={() => handleScheduleInterview(teacher)} 
-                                color="success"
-                                size="small"
-                              >
-                                <EventIcon />
-                              </IconButton>
-                            </Tooltip>
+                            {teacher.status === 'interview' ? (
+                              <Tooltip title="View Interview Details">
+                                <IconButton 
+                                  onClick={() => handleShowInterviewDetails(teacher)} 
+                                  color="info"
+                                  size="small"
+                                >
+                                  <InfoIcon />
+                                </IconButton>
+                              </Tooltip>
+                            ) : (
+                              <Tooltip title="Schedule Interview">
+                                <IconButton 
+                                  onClick={() => handleScheduleInterview(teacher)} 
+                                  color="success"
+                                  size="small"
+                                >
+                                  <EventIcon />
+                                </IconButton>
+                              </Tooltip>
+                            )}
                             <Tooltip title="Reject">
                               <IconButton 
                                 onClick={() => handleRejectClick(teacher)} 
@@ -923,6 +1018,155 @@ const TeachersListShow = () => {
           <Button onClick={handleAppointConfirm} color="success" variant="contained">
             Appoint
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={openInterviewDetailsDialog}
+        onClose={handleCloseInterviewDetailsDialog}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>Interview Details</DialogTitle>
+        <DialogContent>
+          {selectedInterviewDetails && (
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="h6" sx={{ mb: 2 }}>Teacher Information</Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="subtitle2">Name</Typography>
+                  <Typography variant="body1">{selectedInterviewDetails.name}</Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="subtitle2">Email</Typography>
+                  <Typography variant="body1">{selectedInterviewDetails.email}</Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="subtitle2">Phone Number</Typography>
+                  <Typography variant="body1">{selectedInterviewDetails.phoneNumber}</Typography>
+                </Grid>
+              </Grid>
+
+              <Typography variant="h6" sx={{ mt: 3, mb: 2 }}>Interviewer Information</Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="subtitle2">Interviewer Name</Typography>
+                  <Typography variant="body1">{selectedInterviewDetails.interviewerName}</Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="subtitle2">Interviewer Email</Typography>
+                  <Typography variant="body1">{selectedInterviewDetails.interviewerEmail}</Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="subtitle2">Interviewer Phone</Typography>
+                  <Typography variant="body1">{selectedInterviewDetails.interviewerPhone}</Typography>
+                </Grid>
+              </Grid>
+
+              <Typography variant="h6" sx={{ mt: 3, mb: 2 }}>Interview Schedule</Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="subtitle2">Date</Typography>
+                  <Typography variant="body1">{selectedInterviewDetails.interviewDate}</Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="subtitle2">Time</Typography>
+                  <Typography variant="body1">{selectedInterviewDetails.interviewTime}</Typography>
+                </Grid>
+              </Grid>
+
+              <Typography variant="h6" sx={{ mt: 3, mb: 2 }}>Zoom Meeting Details</Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={12}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Typography variant="subtitle2" sx={{ minWidth: '150px' }}>Meeting Join Link</Typography>
+                    <Box sx={{ 
+                      flex: 1, 
+                      p: 1, 
+                      bgcolor: 'grey.100', 
+                      borderRadius: 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1,
+                      maxWidth: '100%'
+                    }}>
+                      <Typography 
+                        variant="body2" 
+                        sx={{ 
+                          flex: 1,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          maxWidth: 'calc(100% - 80px)'
+                        }}
+                      >
+                        {selectedInterviewDetails.meetingJoinUrl.split('/').pop() || 'Join Link'}
+                      </Typography>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => {
+                          navigator.clipboard.writeText(selectedInterviewDetails.meetingJoinUrl);
+                          setSnackbar({
+                            open: true,
+                            message: 'Join link copied to clipboard!',
+                            severity: 'success'
+                          });
+                        }}
+                      >
+                        Copy
+                      </Button>
+                    </Box>
+                  </Box>
+                </Grid>
+                <Grid item xs={12}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Typography variant="subtitle2" sx={{ minWidth: '150px' }}>Meeting Start Link</Typography>
+                    <Box sx={{ 
+                      flex: 1, 
+                      p: 1, 
+                      bgcolor: 'grey.100', 
+                      borderRadius: 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1,
+                      maxWidth: '100%'
+                    }}>
+                      <Typography 
+                        variant="body2" 
+                        sx={{ 
+                          flex: 1,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          maxWidth: 'calc(100% - 80px)'
+                        }}
+                      >
+                        {selectedInterviewDetails.meetingStartUrl.split('/').pop() || 'Start Link'}
+                      </Typography>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => {
+                          navigator.clipboard.writeText(selectedInterviewDetails.meetingStartUrl);
+                          setSnackbar({
+                            open: true,
+                            message: 'Start link copied to clipboard!',
+                            severity: 'success'
+                          });
+                        }}
+                      >
+                        Copy
+                      </Button>
+                    </Box>
+                  </Box>
+                </Grid>
+              </Grid>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseInterviewDetailsDialog}>Close</Button>
         </DialogActions>
       </Dialog>
 

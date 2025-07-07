@@ -40,6 +40,8 @@ interface Demo {
   status: 'scheduled' | 'completed' | 'cancelled' | 'no_show' | 'rescheduled' | 'rescheduled_cancelled' | 'rescheduled_completed' | 'rescheduled_no_show';
   remarks: string;
   preferredTimeSlots: string;
+  meetingStartUrl?: string;
+  meetingJoinUrl?: string;
 }
 
 interface Teacher {
@@ -156,6 +158,8 @@ export default function DemoLeadForm({ lead, onComplete, onCancel, teachers }: D
         status: existingDemo.status || 'scheduled',
         remarks: existingDemo.remarks || '',
         preferredTimeSlots: lead.preferredTimeSlots || '',
+        meetingStartUrl: existingDemo.meetingStartUrl || '',
+        meetingJoinUrl: existingDemo.meetingJoinUrl || ''
       });
       setIsViewMode(true);
     } else if (existingDemo) {
@@ -172,6 +176,8 @@ export default function DemoLeadForm({ lead, onComplete, onCancel, teachers }: D
         status: existingDemo.status || 'scheduled',
         remarks: existingDemo.remarks || '',
         preferredTimeSlots: lead.preferredTimeSlots || '',
+        meetingStartUrl: existingDemo.meetingStartUrl || '',
+        meetingJoinUrl: existingDemo.meetingJoinUrl || ''
       });
       setIsViewMode(false); // Allow editing for all non-completed demos
     } else {
@@ -187,6 +193,8 @@ export default function DemoLeadForm({ lead, onComplete, onCancel, teachers }: D
         status: 'scheduled',
         remarks: '',
         preferredTimeSlots: lead.preferredTimeSlots || '',
+        meetingStartUrl: '',
+        meetingJoinUrl: ''
       });
       setIsViewMode(false);
     }
@@ -226,8 +234,14 @@ export default function DemoLeadForm({ lead, onComplete, onCancel, teachers }: D
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement> | { target: { name: string; value: string } }
   ) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    if (typeof e === 'string') {
+      // Direct value change
+      setFormData(prev => ({ ...prev, [e]: value }));
+    } else {
+      // Event-based change
+      const { name, value: eventValue } = e.target;
+      setFormData(prev => ({ ...prev, [name]: eventValue }));
+    }
   };
 
   const handleSubmit = async () => {
@@ -244,6 +258,33 @@ export default function DemoLeadForm({ lead, onComplete, onCancel, teachers }: D
     setLoading(true);
 
     try {
+      // First, create a Zoom meeting
+      const zoomResponse = await fetch(`${baseUrl}/api/zoom/create`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          topic: `Demo Session - ${leadData.studentName} - ${formData.subject}`,
+          start_time: `${formData.date}T${formData.time}:00`,
+          duration: 60, // 1 hour duration
+          timezone: 'Asia/Kolkata',
+          settings: {
+            host_video: true,
+            participant_video: true,
+            join_before_host: false,
+            mute_upon_entry: true,
+            waiting_room: true,
+            enable_chat: true,
+            enable_recording: true
+          }
+        }),
+      });
+
+      const zoomData = await zoomResponse.json();
+      
+      if (!zoomData.success) {
+        throw new Error('Failed to create Zoom meeting');
+      }
+
       const url = formData._id 
         ? `${baseUrl}/api/demo/edit/${formData._id}`
         : `${baseUrl}/api/demo/add`;
@@ -261,6 +302,8 @@ export default function DemoLeadForm({ lead, onComplete, onCancel, teachers }: D
         status: formData.status,
         remarks: formData.remarks,
         preferredTimeSlots: formData.preferredTimeSlots,
+        meetingStartUrl: zoomData.data.start_url,
+        meetingJoinUrl: zoomData.data.join_url
       };
 
       const response = await fetch(url, {
@@ -272,7 +315,7 @@ export default function DemoLeadForm({ lead, onComplete, onCancel, teachers }: D
       const data = await response.json();
 
       if (data.success) {
-        alert('Demo saved successfully!');
+        alert('Demo saved successfully! Zoom meeting has been created.');
         await fetchExistingDemos();
         
         // Reset selection to refresh the view
@@ -289,7 +332,7 @@ export default function DemoLeadForm({ lead, onComplete, onCancel, teachers }: D
       }
     } catch (error) {
       console.error('Error saving:', error);
-      alert('Failed to save demo');
+      alert('Failed to save demo: ' + (error instanceof Error ? error.message : 'Unknown error'));
     } finally {
       setLoading(false);
     }
@@ -577,6 +620,52 @@ export default function DemoLeadForm({ lead, onComplete, onCancel, teachers }: D
                       placeholder="Enter remarks about the demo..."
                     />
                   </div>
+
+                  {/* Zoom Meeting Links */}
+                  {formData.meetingStartUrl && (
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Host Link</label>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={formData.meetingStartUrl}
+                            disabled
+                            className="flex-1 px-3 py-2 border rounded text-sm bg-gray-50 text-gray-600 cursor-not-allowed"
+                          />
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(formData.meetingStartUrl || '');
+                              alert('Host link copied to clipboard!');
+                            }}
+                            className="px-3 py-2 bg-gray-900 text-white rounded text-sm hover:bg-gray-800 transition-colors"
+                          >
+                            Copy
+                          </button>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Join Link</label>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={formData.meetingJoinUrl}
+                            disabled
+                            className="flex-1 px-3 py-2 border rounded text-sm bg-gray-50 text-gray-600 cursor-not-allowed"
+                          />
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(formData.meetingJoinUrl || '');
+                              alert('Join link copied to clipboard!');
+                            }}
+                            className="px-3 py-2 bg-gray-900 text-white rounded text-sm hover:bg-gray-800 transition-colors"
+                          >
+                            Copy
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Action Buttons */}
                   <div className="flex space-x-3 pt-4">

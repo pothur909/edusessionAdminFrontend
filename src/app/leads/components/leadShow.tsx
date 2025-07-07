@@ -216,7 +216,7 @@ export default function LeadsList() {
     fetchEnrolledStudents(); // Add this line to fetch enrolled students on component mount
   }, [filterState.statusFilter]);
 
-  const baseUrl = process.env.BASE_URL;
+  const baseUrl =process.env.BASE_URL;
 
   const fetchLeads = async () => {
     try {
@@ -766,7 +766,7 @@ export default function LeadsList() {
             </div>
           ) : (
             <div className="mb-6">
-              <h3 className="text-lg font-semibold mb-2">Available Teachers</h3>
+              {/* <h3 className="text-lg font-semibold mb-2">Available Teachers</h3>
               {teachers && teachers.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {teachers.map((teacher) => (
@@ -798,7 +798,7 @@ export default function LeadsList() {
                       </div>
                     </div>
                   ))}
-                </div>
+                </div> */}
               ) : (
                 <div className="text-center text-gray-500 py-4">
                   No teachers available for this subject/class combination
@@ -845,6 +845,44 @@ export default function LeadsList() {
               </svg>
             </button>
           </div>
+          {isLoadingTeachers ? (
+            <div className="flex justify-center items-center p-4">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+            </div>
+          ) : (
+            <div className="mb-6">
+              {/* <h3 className="text-lg font-semibold mb-2">Available Teachers</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {teachers.map((teacher) => (
+                  <div
+                    key={teacher._id}
+                    className={`p-4 border rounded-lg ${
+                      teacher.isAvailable && !teacher.isLocked
+                        ? 'bg-green-50 border-green-200'
+                        : 'bg-gray-50 border-gray-200'
+                    }`}
+                  >
+                    <h4 className="font-medium">{teacher.name}</h4>
+                    <p className="text-sm text-gray-600">{teacher.email}</p>
+                    <p className="text-sm text-gray-600">{teacher.phoneNumber}</p>
+                    <div className="mt-2">
+                      <span
+                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          teacher.isAvailable && !teacher.isLocked
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-red-100 text-red-800'
+                        }`}
+                      >
+                        {teacher.isAvailable && !teacher.isLocked
+                          ? 'Available'
+                          : 'Not Available'}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div> */}
+            </div>
+          )}
           <EnrollmentForm
             lead={editingLead}
             onComplete={handleEnrollmentComplete}
