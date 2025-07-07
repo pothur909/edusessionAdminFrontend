@@ -283,8 +283,8 @@ export function LeadForm({ formData, setFormData, teachers }: {
     ];
     const exampleRow = [
       'John Doe',
-      '9876543210',
-      '9123456789',
+      '+919876543210',
+      '+919123456789',
       'Delhi',
       'john@example.com',
       'CBSE',
