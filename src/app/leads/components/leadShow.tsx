@@ -120,6 +120,22 @@ interface Enrollment {
   subjects?: Subject[]; // Add this line
 }
 
+interface EnrollmentResponse {
+  success: boolean;
+  message: string;
+  demos?: Demo[];
+  enroll?: Enrollment[];
+  lead?: {
+    studentName: string;
+    studentPhone: string;
+    parentPhone: string;
+    city: string;
+    email: string;
+    board: string;
+    class: string;
+  };
+}
+
 const LEAD_TABS = [
   { label: 'Doubt Session', value: 'doubt session' },
   { label: 'One to One', value: '1 to 1' },
@@ -135,6 +151,7 @@ function categorizeLead(lead: Lead) {
 export default function LeadsList() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [isLoadingTeachers, setIsLoadingTeachers] = useState(false);
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
@@ -1437,7 +1454,8 @@ export default function LeadsList() {
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                               <button
-                                onClick={() => handleBookDemoClick(lead)}
+                               onClick={() => router.push(`/demo/book/${lead._id}`)}
+                              disabled={enrollmentLoading}
                                 className="text-blue-600 hover:text-blue-900"
                               >
                                 Book Demo
@@ -1458,27 +1476,21 @@ export default function LeadsList() {
                               )}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                              {isStudentEnrolled(lead) ? (
-                                <div className="flex flex-col items-end gap-1">
-                                  <span className="inline-block bg-green-100 text-green-800 px-2 py-1 rounded text-sm">
-                                    Enrolled
-                                  </span>
-                                  <button
-                                    onClick={() => handleEnrollClick(lead)}
-                                    disabled={enrollmentLoading}
-                                    className="text-blue-600 hover:text-blue-900 text-xs disabled:opacity-50"
-                                  >
-                                    {enrollmentLoading ? "Loading..." : "Update"}
-                                  </button>
-                                </div>
-                              ) : (
-                                <button
-                                  onClick={() => handleEnrollClick(lead)}
-                                  disabled={enrollmentLoading}
-                                  className="text-blue-600 hover:text-blue-900 disabled:opacity-50"
-                                >
-                                  {enrollmentLoading ? "Loading..." : "Enroll"}
-                                </button>
+                               {isStudentEnrolled(lead) ? (
+                              <button
+                                className="bg-green-500 text-white px-4 py-2 rounded-full cursor-default"
+                                disabled
+                              >
+                                Enrolled
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => router.push(`/leads/newEnrollment/${lead._id}`)}
+                                disabled={enrollmentLoading}
+                                className="bg-blue-600 text-white px-4 py-2 rounded-full hover:bg-blue-700 disabled:opacity-50"
+                              >
+                                Enroll Now
+                              </button>
                               )}
                             </td>
                           </tr>
