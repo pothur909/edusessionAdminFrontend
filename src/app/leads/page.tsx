@@ -1,4 +1,3 @@
-
 'use client';
 import LeadsList from './components/leadShow';
 

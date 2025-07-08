@@ -25,6 +25,10 @@ import {
   Tab,
   TextField,
   Grid,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import VisibilityIcon from '@mui/icons-material/Visibility';
@@ -32,8 +36,27 @@ import EventIcon from '@mui/icons-material/Event';
 import CancelIcon from '@mui/icons-material/Cancel';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import AddIcon from '@mui/icons-material/Add';
+import InfoIcon from '@mui/icons-material/Info';
 import TeacherForm from '../addTeachers/page';
 import { useRouter } from 'next/navigation';
+import { useFilter } from '@/context/FilterContext';
+import { FilterPanel } from '@/app/components/FilterPanel';
+import { exportToExcel } from '@/utils/excelExport';
+
+interface InterviewDetails {
+  name: string;
+  email: string;
+  phoneNumber: string;
+  interviewDate: string;
+  interviewTime: string;
+  interviewerName: string;
+  interviewerEmail: string;
+  interviewerPhone: string;
+  meetingStartUrl: string;
+  meetingJoinUrl: string;
+  meetingId?: string;
+  meetingPassword?: string;
+}
 
 interface Teacher {
   _id: string;
@@ -50,6 +73,10 @@ interface Teacher {
   status: 'new' | 'interview' | 'interviewdone' | 'contacted' | 'appointed' | 'rejected' | 'rejectafterinterview';
   createdAt: string;
   updatedAt: string;
+  languages?: string[];
+  additionalCourse?: string[];
+  expectedSalary: string;
+  interviewDetails?: InterviewDetails;
 }
 
 function a11yProps(index: number) {
@@ -117,20 +144,165 @@ const TeachersListShow = () => {
   });
   const [openAppointDialog, setOpenAppointDialog] = useState(false);
   const [teacherToAppoint, setTeacherToAppoint] = useState<Teacher | null>(null);
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [openInterviewDetailsDialog, setOpenInterviewDetailsDialog] = useState(false);
+  const [selectedInterviewDetails, setSelectedInterviewDetails] = useState<InterviewDetails | null>(null);
 
-  const baseUrl =process.env. BASE_URL||"http://localhost:6969";
+  const baseUrl = process.env.BASE_URL || "http://localhost:6969";
+
+  const {
+    filterState,
+    setSearchQuery,
+    setDateRange,
+    setMonthFilter,
+    setYearFilter,
+    setBoardFilter,
+    setClassFilter,
+    setSubjectFilter,
+    setStatusFilter,
+    setQuickMonthSelection,
+    setCurrentPage,
+    clearAllFilters,
+    hasActiveFilters,
+  } = useFilter();
+
+  // Get unique values for filters
+  const uniqueBoards = [...new Set(teachers.flatMap(teacher => teacher.board).filter(Boolean))];
+  const uniqueClasses = [...new Set(teachers.flatMap(teacher => teacher.classes).filter(Boolean))];
+  const uniqueSubjects = [...new Set(teachers.flatMap(teacher => teacher.subjects).filter(Boolean))];
+  const uniqueQualifications = [...new Set(teachers.map(teacher => teacher.qualification).filter(Boolean))];
+  
+  // Experience ranges for filtering
+  const experienceRanges = [
+    { value: 'all', label: 'All Experience' },
+    { value: '0-1', label: '0-1 years' },
+    { value: '1-3', label: '1-3 years' },
+    { value: '3-5', label: '3-5 years' },
+    { value: '5-10', label: '5-10 years' },
+    { value: '10+', label: '10+ years' }
+  ];
+
+  // Add new filter state
+  const [qualificationFilter, setQualificationFilter] = useState('all');
+  const [experienceFilter, setExperienceFilter] = useState('all');
+
+  const handleExportExcel = () => {
+    const columns = [
+      { key: 'name', label: 'Name' },
+      { key: 'phoneNumber', label: 'Phone Number' },
+      { key: 'email', label: 'Email' },
+      { key: 'board', label: 'Boards' },
+      { key: 'classes', label: 'Classes' },
+      { key: 'subjects', label: 'Subjects' },
+      { key: 'experience', label: 'Experience' },
+      { key: 'qualification', label: 'Qualification' },
+      { key: 'status', label: 'Status' },
+      { key: 'createdAt', label: 'Created At' }
+    ];
+
+    const data = filteredTeachers.map(teacher => ({
+      name: teacher.name,
+      phoneNumber: teacher.phoneNumber,
+      email: teacher.email,
+      board: teacher.board.join(', '),
+      classes: teacher.classes.join(', '),
+      subjects: teacher.subjects.join(', '),
+      experience: teacher.experience,
+      qualification: teacher.qualification,
+      status: teacher.status,
+      expectedSalary: teacher.expectedSalary,
+      createdAt: new Date(teacher.createdAt).toLocaleDateString()
+    }));
+
+    exportToExcel(data, columns, {
+      filename: 'teachers.xlsx',
+      sheetName: 'Teachers'
+    });
+  };
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setSelectedTab(newValue);
+    // Update status filter based on selected tab
+    const selectedStatus = statusTabs[newValue].value;
+    setStatusFilter(selectedStatus);
+  };
+
+  const handleApplyFilters = (filters: { qualification: string; experience: string }) => {
+    setQualificationFilter(filters.qualification);
+    setExperienceFilter(filters.experience);
   };
 
   const filteredTeachers = teachers.filter(teacher => {
-    const selectedStatus = statusTabs[selectedTab].value;
-    if (selectedStatus === 'all') return true;
-    if (selectedStatus === 'rejected') {
-      return teacher.status === 'rejected' || teacher.status === 'rejectafterinterview';
+    const searchLower = filterState.searchQuery.toLowerCase();
+    const name = teacher.name?.toLowerCase() || '';
+    const email = teacher.email?.toLowerCase() || '';
+    const phoneNumber = teacher.phoneNumber || '';
+    const qualification = teacher.qualification?.toLowerCase() || '';
+
+    const matchesSearch =
+      name.includes(searchLower) ||
+      email.includes(searchLower) ||
+      phoneNumber.includes(filterState.searchQuery) ||
+      qualification.includes(searchLower);
+
+    // Update status matching logic to handle 'rejected' tab
+    const matchesStatus = selectedTab === 0 || // 'All' tab
+      (selectedTab === 6 ? // 'Rejected' tab
+        (teacher.status === 'rejected' || teacher.status === 'rejectafterinterview') :
+        teacher.status === statusTabs[selectedTab].value);
+
+    const matchesBoard = filterState.boardFilter === 'all' || teacher.board.includes(filterState.boardFilter);
+    const matchesClass = filterState.classFilter === 'all' || teacher.classes.includes(filterState.classFilter);
+    const matchesSubject = filterState.subjectFilter === 'all' || teacher.subjects.includes(filterState.subjectFilter);
+    const matchesQualification = qualificationFilter === 'all' || teacher.qualification === qualificationFilter;
+
+    // Experience filtering logic
+    let matchesExperience = true;
+    if (experienceFilter !== 'all') {
+      const expYears = parseInt(teacher.experience) || 0;
+      switch (experienceFilter) {
+        case '0-1':
+          matchesExperience = expYears >= 0 && expYears < 1;
+          break;
+        case '1-3':
+          matchesExperience = expYears >= 1 && expYears < 3;
+          break;
+        case '3-5':
+          matchesExperience = expYears >= 3 && expYears < 5;
+          break;
+        case '5-10':
+          matchesExperience = expYears >= 5 && expYears < 10;
+          break;
+        case '10+':
+          matchesExperience = expYears >= 10;
+          break;
+      }
     }
-    return teacher.status === selectedStatus;
+
+    const teacherDate = new Date(teacher.createdAt);
+    const matchesDateRange = (
+      !filterState.dateRange.startDate || teacherDate >= new Date(filterState.dateRange.startDate) &&
+      (!filterState.dateRange.endDate || teacherDate <= new Date(filterState.dateRange.endDate + "T23:59:59"))
+    );
+
+    const teacherMonth = teacherDate.getMonth() + 1;
+    const matchesMonth = filterState.monthFilter === "all" || teacherMonth.toString() === filterState.monthFilter;
+
+    const teacherYear = teacherDate.getFullYear();
+    const matchesYear = filterState.yearFilter === "all" || teacherYear.toString() === filterState.yearFilter;
+
+    return (
+      matchesSearch &&
+      matchesStatus &&
+      matchesBoard &&
+      matchesClass &&
+      matchesSubject &&
+      matchesQualification &&
+      matchesExperience &&
+      matchesDateRange &&
+      matchesMonth &&
+      matchesYear
+    );
   });
 
   const fetchTeachers = async () => {
@@ -185,26 +357,78 @@ const TeachersListShow = () => {
     if (!teacherToReject) return;
 
     try {
-      const response = await fetch(`${baseUrl}/api/teachers/${teacherToReject._id}`, {
-        method: 'PUT',
+      // First create a Zoom meeting
+      const zoomResponse = await fetch(`${baseUrl}/api/zoom/create`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          ...teacherToReject, 
-          status: 'interview',
-          interviewDetails: {
-            ...interviewForm,
-            interviewDateTime: `${interviewForm.interviewDate}T${interviewForm.interviewTime}`,
+        body: JSON.stringify({
+          topic: `Teacher Interview - ${teacherToReject.name}`,
+          instant: true,
+          options: {
+            enableChat: true,
+            enableRecording: true
           }
         }),
       });
 
+      if (!zoomResponse.ok) {
+        const errorData = await zoomResponse.json();
+        console.error("Zoom API Error:", errorData);
+        throw new Error('Failed to create Zoom meeting');
+      }
+
+      const zoomResponseData = await zoomResponse.json();
+      console.log("Complete Zoom API Response:", JSON.stringify(zoomResponseData, null, 2));
+
+      // Check if the response has the expected structure
+      if (!zoomResponseData.success || !zoomResponseData.data || !zoomResponseData.data.start_url || !zoomResponseData.data.join_url) {
+        console.error("Invalid Zoom API Response Structure:", zoomResponseData);
+        throw new Error('Invalid Zoom API response structure');
+      }
+
+      const zoomData = zoomResponseData.data;
+
+      // Now update the teacher with interview details and Zoom meeting info
+      const updateBody = { 
+        ...teacherToReject, 
+        status: 'interview',
+        interviewDetails: {
+          name: interviewForm.name,
+          email: interviewForm.email,
+          phoneNumber: interviewForm.phoneNumber,
+          interviewDate: interviewForm.interviewDate,
+          interviewTime: interviewForm.interviewTime,
+          interviewDateTime: `${interviewForm.interviewDate}T${interviewForm.interviewTime}`,
+          interviewerName: interviewForm.interviewerName,
+          interviewerEmail: interviewForm.interviewerEmail,
+          interviewerPhone: interviewForm.interviewerPhone,
+          meetingStartUrl: zoomData.start_url,
+          meetingJoinUrl: zoomData.join_url,
+          meetingId: zoomData.id,
+          meetingPassword: zoomData.password
+        }
+      };
+      
+      console.log("Teacher Update Request Body:", JSON.stringify(updateBody, null, 2));
+
+      const response = await fetch(`${baseUrl}/api/teachers/${teacherToReject._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updateBody),
+      });
+
       if (!response.ok) {
+        const errorData = await response.json();
+        console.error("Teacher Update Error:", errorData);
         throw new Error('Failed to schedule interview');
       }
 
+      const updatedTeacher = await response.json();
+      console.log("Updated Teacher Response:", JSON.stringify(updatedTeacher, null, 2));
+
       setSnackbar({
         open: true,
-        message: 'Interview scheduled successfully!',
+        message: 'Interview scheduled successfully with Zoom meeting!',
         severity: 'success'
       });
 
@@ -343,6 +567,18 @@ const TeachersListShow = () => {
     setTeacherToAppoint(null);
   };
 
+  const handleShowInterviewDetails = (teacher: Teacher) => {
+    if (teacher.interviewDetails) {
+      setSelectedInterviewDetails(teacher.interviewDetails);
+      setOpenInterviewDetailsDialog(true);
+    }
+  };
+
+  const handleCloseInterviewDetailsDialog = () => {
+    setOpenInterviewDetailsDialog(false);
+    setSelectedInterviewDetails(null);
+  };
+
   if (loading) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
@@ -365,16 +601,66 @@ const TeachersListShow = () => {
         <Typography variant="h4" style={{ color: 'black' }}>
           Teachers Application List
         </Typography>
-        <Button
-          variant="contained"
-          color="primary"
-          startIcon={<AddIcon />}
-          onClick={() => router.push('/teachers/addTeachers')}
-        >
-          Add Teacher
-        </Button>
+        <Box sx={{ display: 'flex', gap: 2 }}>
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={handleExportExcel}
+          >
+            Download Data
+          </Button>
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<AddIcon />}
+            onClick={() => router.push('/teachers/addTeachers')}
+          >
+            Add Teacher
+          </Button>
+        </Box>
       </Box>
 
+      {/* Filter Panel */}
+      <FilterPanel
+        showAdvancedFilters={showAdvancedFilters}
+        setShowAdvancedFilters={setShowAdvancedFilters}
+        months={[
+          { value: 'all', label: 'All Months' },
+          { value: '1', label: 'January' },
+          { value: '2', label: 'February' },
+          { value: '3', label: 'March' },
+          { value: '4', label: 'April' },
+          { value: '5', label: 'May' },
+          { value: '6', label: 'June' },
+          { value: '7', label: 'July' },
+          { value: '8', label: 'August' },
+          { value: '9', label: 'September' },
+          { value: '10', label: 'October' },
+          { value: '11', label: 'November' },
+          { value: '12', label: 'December' }
+        ]}
+        uniqueBoards={uniqueBoards}
+        uniqueClasses={uniqueClasses}
+        uniqueSubjects={uniqueSubjects}
+        statusOptions={[
+          { value: 'all', label: 'All Status' },
+          { value: 'new', label: 'New' },
+          { value: 'interview', label: 'Interview' },
+          { value: 'interviewdone', label: 'Interview Done' },
+          { value: 'contacted', label: 'Contacted' },
+          { value: 'appointed', label: 'Appointed' },
+          { value: 'rejected', label: 'Rejected' },
+          { value: 'rejectafterinterview', label: 'Rejected After Interview' }
+        ]}
+        qualificationOptions={[
+          { value: 'all', label: 'All Qualifications' },
+          ...uniqueQualifications.map(qual => ({ value: qual, label: qual }))
+        ]}
+        experienceOptions={experienceRanges}
+        onApplyFilters={handleApplyFilters}
+      />
+
+      {/* Status Tabs */}
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
         <Tabs 
           value={selectedTab} 
@@ -419,6 +705,7 @@ const TeachersListShow = () => {
               <TableCell>Classes</TableCell>
               <TableCell>Subjects</TableCell>
               <TableCell>Experience</TableCell>
+              <TableCell>Expected Salary</TableCell>
               <TableCell>Qualification</TableCell>
               <TableCell>Status</TableCell>
               <TableCell>Actions</TableCell>
@@ -463,6 +750,7 @@ const TeachersListShow = () => {
                   ))}
                 </TableCell>
                 <TableCell>{teacher.experience}</TableCell>
+                <TableCell>{teacher.expectedSalary}</TableCell>
                 <TableCell>{teacher.qualification}</TableCell>
                 <TableCell>
                   <Chip
@@ -504,15 +792,27 @@ const TeachersListShow = () => {
                         </Tooltip>
                         {teacher.status !== 'contacted' && (
                           <>
-                            <Tooltip title="Schedule Interview">
-                              <IconButton 
-                                onClick={() => handleScheduleInterview(teacher)} 
-                                color="success"
-                                size="small"
-                              >
-                                <EventIcon />
-                              </IconButton>
-                            </Tooltip>
+                            {teacher.status === 'interview' ? (
+                              <Tooltip title="View Interview Details">
+                                <IconButton 
+                                  onClick={() => handleShowInterviewDetails(teacher)} 
+                                  color="info"
+                                  size="small"
+                                >
+                                  <InfoIcon />
+                                </IconButton>
+                              </Tooltip>
+                            ) : (
+                              <Tooltip title="Schedule Interview">
+                                <IconButton 
+                                  onClick={() => handleScheduleInterview(teacher)} 
+                                  color="success"
+                                  size="small"
+                                >
+                                  <EventIcon />
+                                </IconButton>
+                              </Tooltip>
+                            )}
                             <Tooltip title="Reject">
                               <IconButton 
                                 onClick={() => handleRejectClick(teacher)} 
@@ -552,6 +852,9 @@ const TeachersListShow = () => {
                 board: selectedTeacher.board,
                 classes: selectedTeacher.classes,
                 subjects: selectedTeacher.subjects,
+                languages: selectedTeacher.languages || [],
+                additionalCourse: selectedTeacher.additionalCourse || [],
+                expectedSalary : selectedTeacher.expectedSalary,
                 experience: selectedTeacher.experience,
                 qualification: selectedTeacher.qualification,
                 note: selectedTeacher.note,
@@ -715,6 +1018,155 @@ const TeachersListShow = () => {
           <Button onClick={handleAppointConfirm} color="success" variant="contained">
             Appoint
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={openInterviewDetailsDialog}
+        onClose={handleCloseInterviewDetailsDialog}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>Interview Details</DialogTitle>
+        <DialogContent>
+          {selectedInterviewDetails && (
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="h6" sx={{ mb: 2 }}>Teacher Information</Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="subtitle2">Name</Typography>
+                  <Typography variant="body1">{selectedInterviewDetails.name}</Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="subtitle2">Email</Typography>
+                  <Typography variant="body1">{selectedInterviewDetails.email}</Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="subtitle2">Phone Number</Typography>
+                  <Typography variant="body1">{selectedInterviewDetails.phoneNumber}</Typography>
+                </Grid>
+              </Grid>
+
+              <Typography variant="h6" sx={{ mt: 3, mb: 2 }}>Interviewer Information</Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="subtitle2">Interviewer Name</Typography>
+                  <Typography variant="body1">{selectedInterviewDetails.interviewerName}</Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="subtitle2">Interviewer Email</Typography>
+                  <Typography variant="body1">{selectedInterviewDetails.interviewerEmail}</Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="subtitle2">Interviewer Phone</Typography>
+                  <Typography variant="body1">{selectedInterviewDetails.interviewerPhone}</Typography>
+                </Grid>
+              </Grid>
+
+              <Typography variant="h6" sx={{ mt: 3, mb: 2 }}>Interview Schedule</Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="subtitle2">Date</Typography>
+                  <Typography variant="body1">{selectedInterviewDetails.interviewDate}</Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="subtitle2">Time</Typography>
+                  <Typography variant="body1">{selectedInterviewDetails.interviewTime}</Typography>
+                </Grid>
+              </Grid>
+
+              <Typography variant="h6" sx={{ mt: 3, mb: 2 }}>Zoom Meeting Details</Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={12}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Typography variant="subtitle2" sx={{ minWidth: '150px' }}>Meeting Join Link</Typography>
+                    <Box sx={{ 
+                      flex: 1, 
+                      p: 1, 
+                      bgcolor: 'grey.100', 
+                      borderRadius: 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1,
+                      maxWidth: '100%'
+                    }}>
+                      <Typography 
+                        variant="body2" 
+                        sx={{ 
+                          flex: 1,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          maxWidth: 'calc(100% - 80px)'
+                        }}
+                      >
+                        {selectedInterviewDetails.meetingJoinUrl.split('/').pop() || 'Join Link'}
+                      </Typography>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => {
+                          navigator.clipboard.writeText(selectedInterviewDetails.meetingJoinUrl);
+                          setSnackbar({
+                            open: true,
+                            message: 'Join link copied to clipboard!',
+                            severity: 'success'
+                          });
+                        }}
+                      >
+                        Copy
+                      </Button>
+                    </Box>
+                  </Box>
+                </Grid>
+                <Grid item xs={12}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Typography variant="subtitle2" sx={{ minWidth: '150px' }}>Meeting Start Link</Typography>
+                    <Box sx={{ 
+                      flex: 1, 
+                      p: 1, 
+                      bgcolor: 'grey.100', 
+                      borderRadius: 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1,
+                      maxWidth: '100%'
+                    }}>
+                      <Typography 
+                        variant="body2" 
+                        sx={{ 
+                          flex: 1,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          maxWidth: 'calc(100% - 80px)'
+                        }}
+                      >
+                        {selectedInterviewDetails.meetingStartUrl.split('/').pop() || 'Start Link'}
+                      </Typography>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => {
+                          navigator.clipboard.writeText(selectedInterviewDetails.meetingStartUrl);
+                          setSnackbar({
+                            open: true,
+                            message: 'Start link copied to clipboard!',
+                            severity: 'success'
+                          });
+                        }}
+                      >
+                        Copy
+                      </Button>
+                    </Box>
+                  </Box>
+                </Grid>
+              </Grid>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseInterviewDetailsDialog}>Close</Button>
         </DialogActions>
       </Dialog>
 

@@ -1,17 +1,17 @@
-import { useState } from "react"
+// import { useState } from "react"
 
 
-const AdminloginPage=()=>{
+// const AdminloginPage=()=>{
 
-    const [email, setEmail]= useState('');
-    const [password, setPassword]= useState('');
-    const [error, setError] = useState('');
-    const [loading, setLoading]= useState(false);
+//     const [email, setEmail]= useState('');
+//     const [password, setPassword]= useState('');
+//     const [error, setError] = useState('');
+//     const [loading, setLoading]= useState(false);
 
-    return(<>
+//     return(<>
     
-    </>
-    )
+//     </>
+//     )
 
 
-}
+// }
