@@ -298,10 +298,7 @@ export default function LeadsList() {
 
   const isStudentEnrolled = (lead: Lead) => {
     return enrolledStudents.some(
-      (student) =>
-        (student.email &&
-          student.email.toLowerCase() === lead.email?.toLowerCase()) ||
-        (student.phoneNumber && student.phoneNumber === lead.studentPhone)
+      (student) => student.phoneNumber === lead.studentPhone
     );
   };
 
@@ -1294,7 +1291,8 @@ export default function LeadsList() {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                             <button
-                              onClick={() => handleBookDemoClick(lead)}
+                              onClick={() => router.push(`/demo/book/${lead._id}`)}
+                              disabled={enrollmentLoading}
                               className="text-blue-600 hover:text-blue-900"
                             >
                               Book Demo
@@ -1316,25 +1314,19 @@ export default function LeadsList() {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                             {isStudentEnrolled(lead) ? (
-                              <div className="flex flex-col items-end gap-1">
-                                <span className="inline-block bg-green-100 text-green-800 px-2 py-1 rounded text-sm">
-                                  Enrolled
-                                </span>
-                                <button
-                                  onClick={() => handleEnrollClick(lead)}
-                                  disabled={enrollmentLoading}
-                                  className="text-blue-600 hover:text-blue-900 text-xs disabled:opacity-50"
-                                >
-                                  {enrollmentLoading ? "Loading..." : "Update"}
-                                </button>
-                              </div>
+                              <button
+                                className="bg-green-500 text-white px-4 py-2 rounded-full cursor-default"
+                                disabled
+                              >
+                                Enrolled
+                              </button>
                             ) : (
                               <button
-                                onClick={() => handleEnrollClick(lead)}
+                                onClick={() => router.push(`/leads/newEnrollment/${lead._id}`)}
                                 disabled={enrollmentLoading}
-                                className="text-blue-600 hover:text-blue-900 disabled:opacity-50"
+                                className="bg-blue-600 text-white px-4 py-2 rounded-full hover:bg-blue-700 disabled:opacity-50"
                               >
-                                {enrollmentLoading ? "Loading..." : "Enroll"}
+                                Enroll Now
                               </button>
                             )}
                           </td>
