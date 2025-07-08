@@ -5,8 +5,6 @@ import { useRouter } from "next/navigation";
 import EditLeadForm from "./leadEdit";
 import DemoLeadForm from "../../demo/components/demoForm";
 import EnrollmentForm from "../../enrollment/components/enrollmentAddForm";
-import { Search, Filter, X, Calendar } from 'lucide-react';
-import * as XLSX from 'xlsx';
 import { useFilter } from '@/context/FilterContext';
 import { FilterPanel } from '@/app/components/FilterPanel';
 import { exportToExcel } from '@/utils/excelExport';
@@ -66,6 +64,7 @@ interface Lead {
   existingStudentId?: string;
   demo?: Demo | null;
   sessionType?: string; // Added for new tab logic
+  assignedTo?: string; // Added for assignment check
 }
 
 interface DemoResponse {
@@ -121,26 +120,11 @@ interface Enrollment {
   subjects?: Subject[]; // Add this line
 }
 
-interface EnrollmentResponse {
-  success: boolean;
-  message: string;
-  demos?: Demo[];
-  enroll?: Enrollment[];
-  lead?: {
-    studentName: string;
-    studentPhone: string;
-    parentPhone: string;
-    city: string;
-    email: string;
-    board: string;
-    class: string;
-  };
-}
-
 const LEAD_TABS = [
   { label: 'Doubt Session', value: 'doubt session' },
   { label: 'One to One', value: '1 to 1' },
   { label: 'Admin Created', value: 'admin' },
+  { label: 'Assigned to Me', value: 'assigned-to-me' },
 ];
 
 function categorizeLead(lead: Lead) {
@@ -151,10 +135,8 @@ function categorizeLead(lead: Lead) {
 export default function LeadsList() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [isLoadingTeachers, setIsLoadingTeachers] = useState(false);
-  const [deleteLoading, setDeleteLoading] = useState<string | null>(null);
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const [showEditForm, setShowEditForm] = useState(false);
   const [bookDemoForm, setBookDemoForm] = useState(false);
@@ -166,22 +148,192 @@ export default function LeadsList() {
   const [enrollmentLoading, setEnrollmentLoading] = useState(false);
 
   const [selectedTab, setSelectedTab] = useState('doubt session');
+  const [selectedLeads, setSelectedLeads] = useState<string[]>([]);
+  const [selectAllLeads, setSelectAllLeads] = useState(false);
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [subadmins, setSubadmins] = useState<{_id: string, name: string, email: string, role: string}[]>([]);
+  const [selectedSubadmin, setSelectedSubadmin] = useState<string>("");
+  const [assignLoading, setAssignLoading] = useState(false);
+  const [assignMessage, setAssignMessage] = useState("");
 
-  const {
-    filterState,
-    setSearchQuery,
-    setDateRange,
-    setMonthFilter,
-    setYearFilter,
-    setBoardFilter,
-    setClassFilter,
-    setSubjectFilter,
-    setStatusFilter,
-    setQuickMonthSelection,
-    setCurrentPage,
-    clearAllFilters,
-    hasActiveFilters,
-  } = useFilter();
+  // Add after subadmins state
+  const [selectedAssignedSubadmin, setSelectedAssignedSubadmin] = useState<string>("");
+  const [assignedLeads, setAssignedLeads] = useState<Lead[]>([]);
+  const [loadingAssignedLeads, setLoadingAssignedLeads] = useState(false);
+
+  const [myAssignedLeads, setMyAssignedLeads] = useState<Lead[]>([]);
+  const [loadingMyAssignedLeads, setLoadingMyAssignedLeads] = useState(false);
+  const [myUserId, setMyUserId] = useState<string>("");
+
+  const { filterState, setStatusFilter, setCurrentPage } = useFilter();
+
+  // Filtering and pagination logic
+  const tabFilteredLeads = leads.filter(lead => categorizeLead(lead) === selectedTab);
+  const filteredLeads = tabFilteredLeads.filter((lead) => {
+    const searchLower = filterState.searchQuery.toLowerCase();
+    const studentName = lead.studentName?.toLowerCase() || "";
+    const studentPhone = lead.studentPhone || "";
+    const email = lead.email?.toLowerCase() || "";
+    const parentPhone = lead.parentPhone || "";
+
+    // Search filter
+    const matchesSearch =
+      filterState.searchQuery === "" ||
+      studentName.includes(searchLower) ||
+      studentPhone.includes(filterState.searchQuery) ||
+      email.includes(searchLower) ||
+      parentPhone.includes(filterState.searchQuery);
+
+    // Status filter
+    const matchesTab =
+      filterState.statusFilter === "all" || lead.status?.toLowerCase() === filterState.statusFilter;
+
+    // Date range filter
+    const leadDate = new Date(lead.createdAt);
+    const matchesDateRange =
+      (!filterState.dateRange.startDate || leadDate >= new Date(filterState.dateRange.startDate)) &&
+      (!filterState.dateRange.endDate ||
+        leadDate <= new Date(filterState.dateRange.endDate + "T23:59:59"));
+
+    // Month filter
+    const leadMonth = leadDate.getMonth() + 1; // 1-12
+    const matchesMonth =
+      filterState.monthFilter === "all" || leadMonth.toString() === filterState.monthFilter;
+
+    // Year filter
+    const leadYear = leadDate.getFullYear();
+    const matchesYear =
+      filterState.yearFilter === "all" || leadYear.toString() === filterState.yearFilter;
+
+    // Demo status filter
+    let matchesDemoStatus = true;
+    if (filterState.demoStatusFilter !== "all") {
+      if (filterState.demoStatusFilter === "no_demo") {
+        matchesDemoStatus = !lead.demo;
+      } else {
+        matchesDemoStatus = lead.demo?.status === filterState.demoStatusFilter;
+      }
+    }
+
+    // Board filter
+    const matchesBoard = filterState.boardFilter === "all" || lead.board === filterState.boardFilter;
+
+    // Class filter
+    const matchesClass = filterState.classFilter === "all" || lead.class === filterState.classFilter;
+
+    // Subject filter
+    const matchesSubject =
+      filterState.subjectFilter === "all" ||
+      (lead.subjects && lead.subjects.includes(filterState.subjectFilter));
+
+    return (
+      matchesSearch &&
+      matchesTab &&
+      matchesDateRange &&
+      matchesMonth &&
+      matchesYear &&
+      matchesDemoStatus &&
+      matchesBoard &&
+      matchesClass &&
+      matchesSubject
+    );
+  });
+  const totalPages = Math.ceil(filteredLeads.length / filterState.itemsPerPage);
+  const startIndex = (filterState.currentPage - 1) * filterState.itemsPerPage;
+  const endIndex = startIndex + filterState.itemsPerPage;
+  const currentLeads = filteredLeads.slice(startIndex, endIndex);
+
+  // Fetch subadmins when modal opens
+  useEffect(() => {
+    if (showAssignModal) {
+      fetch("http://localhost:6969/api/leads/subadmins")
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) setSubadmins(data.data);
+        });
+    }
+  }, [showAssignModal]);
+
+  // Fetch assigned leads when subadmin is selected
+  useEffect(() => {
+    if (selectedAssignedSubadmin) {
+      setLoadingAssignedLeads(true);
+      fetch(`http://localhost:6969/api/leads/assigned-leads/${selectedAssignedSubadmin}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) setAssignedLeads(data.data);
+          else setAssignedLeads([]);
+        })
+        .finally(() => setLoadingAssignedLeads(false));
+    } else {
+      setAssignedLeads([]);
+    }
+  }, [selectedAssignedSubadmin]);
+
+  // Fetch user id from localStorage and assigned leads on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const adminStr = localStorage.getItem('admin');
+      if (adminStr) {
+        try {
+          const admin = JSON.parse(adminStr);
+          if (admin && admin._id) {
+            setMyUserId(admin._id);
+            setLoadingMyAssignedLeads(true);
+            fetch(`http://localhost:6969/api/leads/assigned-leads/${admin._id}`)
+              .then(res => res.json())
+              .then(data => {
+                if (data.success) setMyAssignedLeads(data.data);
+                else setMyAssignedLeads([]);
+              })
+              .finally(() => setLoadingMyAssignedLeads(false));
+          }
+        } catch {}
+      }
+    }
+  }, []);
+
+  // Checkbox logic
+  const handleLeadCheckbox = (leadId: string) => {
+    setSelectedLeads(prev => prev.includes(leadId) ? prev.filter(id => id !== leadId) : [...prev, leadId]);
+  };
+  const handleSelectAllLeads = () => {
+    setSelectAllLeads(prev => {
+      const newVal = !prev;
+      setSelectedLeads(newVal ? currentLeads.map(l => l._id) : []);
+      return newVal;
+    });
+  };
+  useEffect(() => {
+    setSelectAllLeads(selectedLeads.length === currentLeads.length && currentLeads.length > 0);
+  }, [selectedLeads, currentLeads]);
+
+  // Assign leads to subadmin
+  const handleAssignLeads = async () => {
+    if (!selectedSubadmin || selectedLeads.length === 0) return;
+    setAssignLoading(true);
+    setAssignMessage("");
+    try {
+      const res = await fetch("http://localhost:6969/api/leads/assign-lead", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ leadIds: selectedLeads, subadminId: selectedSubadmin })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setAssignMessage("Leads assigned successfully!");
+        setSelectedLeads([]);
+        setShowAssignModal(false);
+        fetchLeads();
+      } else {
+        setAssignMessage(data.message || "Assignment failed. Please try again.");
+      }
+    } catch (err) {
+      setAssignMessage("Error assigning leads.");
+    } finally {
+      setAssignLoading(false);
+    }
+  };
 
   const router = useRouter();
 
@@ -258,10 +410,10 @@ export default function LeadsList() {
         );
         setLeads(leadsWithDemos);
       } else {
-        setError(data.message || "Failed to fetch leads");
+        // setError(data.message || "Failed to fetch leads");
       }
-    } catch (error) {
-      setError("An error occurred while fetching leads");
+    } catch {
+      // error handling
     } finally {
       setIsLoading(false);
     }
@@ -274,25 +426,8 @@ export default function LeadsList() {
       if (data.success) {
         setEnrolledStudents(data.data || []);
       }
-    } catch (error) {
-      console.log("Error fetching enrolled students:", error);
-    }
-  };
-
-  // New function to fetch specific student by ID
-  const fetchStudentById = async (
-    studentId: string
-  ): Promise<Enrollment | null> => {
-    try {
-      const response = await fetch(`${baseUrl}/api/students/${studentId}`);
-      const data = await response.json();
-      if (data.success) {
-        return data.data;
-      }
-      return null;
-    } catch (error) {
-      console.error("Error fetching student by ID:", error);
-      return null;
+    } catch {
+      // error handling
     }
   };
 
@@ -315,7 +450,6 @@ export default function LeadsList() {
     }
 
     try {
-      setDeleteLoading(leadId);
       const response = await fetch(`${baseUrl}/api/leads/deleteled/${leadId}`, {
         method: "DELETE",
       });
@@ -333,7 +467,7 @@ export default function LeadsList() {
       console.error("Error deleting lead:", error);
       alert("An error occurred while deleting the lead");
     } finally {
-      setDeleteLoading(null);
+      // setDeleteLoading(null); // This line was removed
     }
   };
 
@@ -557,83 +691,83 @@ export default function LeadsList() {
   };
 
   // Tab + filter logic
-  const tabFilteredLeads = leads.filter(lead => categorizeLead(lead) === selectedTab);
+  // const tabFilteredLeads = leads.filter(lead => categorizeLead(lead) === selectedTab);
 
-  const filteredLeads = tabFilteredLeads.filter((lead) => {
-    const searchLower = filterState.searchQuery.toLowerCase();
-    const studentName = lead.studentName?.toLowerCase() || "";
-    const studentPhone = lead.studentPhone || "";
-    const email = lead.email?.toLowerCase() || "";
-    const parentPhone = lead.parentPhone || "";
+  // const filteredLeads = tabFilteredLeads.filter((lead) => {
+  //   const searchLower = filterState.searchQuery.toLowerCase();
+  //   const studentName = lead.studentName?.toLowerCase() || "";
+  //   const studentPhone = lead.studentPhone || "";
+  //   const email = lead.email?.toLowerCase() || "";
+  //   const parentPhone = lead.parentPhone || "";
 
-    // Search filter
-    const matchesSearch =
-      filterState.searchQuery === "" ||
-      studentName.includes(searchLower) ||
-      studentPhone.includes(filterState.searchQuery) ||
-      email.includes(searchLower) ||
-      parentPhone.includes(filterState.searchQuery);
+  //   // Search filter
+  //   const matchesSearch =
+  //     filterState.searchQuery === "" ||
+  //     studentName.includes(searchLower) ||
+  //     studentPhone.includes(filterState.searchQuery) ||
+  //     email.includes(searchLower) ||
+  //     parentPhone.includes(filterState.searchQuery);
 
-    // Status filter
-    const matchesTab =
-      filterState.statusFilter === "all" || lead.status?.toLowerCase() === filterState.statusFilter;
+  //   // Status filter
+  //   const matchesTab =
+  //     filterState.statusFilter === "all" || lead.status?.toLowerCase() === filterState.statusFilter;
 
-    // Date range filter
-    const leadDate = new Date(lead.createdAt);
-    const matchesDateRange =
-      (!filterState.dateRange.startDate || leadDate >= new Date(filterState.dateRange.startDate)) &&
-      (!filterState.dateRange.endDate ||
-        leadDate <= new Date(filterState.dateRange.endDate + "T23:59:59"));
+  //   // Date range filter
+  //   const leadDate = new Date(lead.createdAt);
+  //   const matchesDateRange =
+  //     (!filterState.dateRange.startDate || leadDate >= new Date(filterState.dateRange.startDate)) &&
+  //     (!filterState.dateRange.endDate ||
+  //       leadDate <= new Date(filterState.dateRange.endDate + "T23:59:59"));
 
-    // Month filter
-    const leadMonth = leadDate.getMonth() + 1; // 1-12
-    const matchesMonth =
-      filterState.monthFilter === "all" || leadMonth.toString() === filterState.monthFilter;
+  //   // Month filter
+  //   const leadMonth = leadDate.getMonth() + 1; // 1-12
+  //   const matchesMonth =
+  //     filterState.monthFilter === "all" || leadMonth.toString() === filterState.monthFilter;
 
-    // Year filter
-    const leadYear = leadDate.getFullYear();
-    const matchesYear =
-      filterState.yearFilter === "all" || leadYear.toString() === filterState.yearFilter;
+  //   // Year filter
+  //   const leadYear = leadDate.getFullYear();
+  //   const matchesYear =
+  //     filterState.yearFilter === "all" || leadYear.toString() === filterState.yearFilter;
 
-    // Demo status filter
-    let matchesDemoStatus = true;
-    if (filterState.demoStatusFilter !== "all") {
-      if (filterState.demoStatusFilter === "no_demo") {
-        matchesDemoStatus = !lead.demo;
-      } else {
-        matchesDemoStatus = lead.demo?.status === filterState.demoStatusFilter;
-      }
-    }
+  //   // Demo status filter
+  //   let matchesDemoStatus = true;
+  //   if (filterState.demoStatusFilter !== "all") {
+  //     if (filterState.demoStatusFilter === "no_demo") {
+  //       matchesDemoStatus = !lead.demo;
+  //     } else {
+  //       matchesDemoStatus = lead.demo?.status === filterState.demoStatusFilter;
+  //     }
+  //   }
 
-    // Board filter
-    const matchesBoard = filterState.boardFilter === "all" || lead.board === filterState.boardFilter;
+  //   // Board filter
+  //   const matchesBoard = filterState.boardFilter === "all" || lead.board === filterState.boardFilter;
 
-    // Class filter
-    const matchesClass = filterState.classFilter === "all" || lead.class === filterState.classFilter;
+  //   // Class filter
+  //   const matchesClass = filterState.classFilter === "all" || lead.class === filterState.classFilter;
 
-    // Subject filter
-    const matchesSubject =
-      filterState.subjectFilter === "all" ||
-      (lead.subjects && lead.subjects.includes(filterState.subjectFilter));
+  //   // Subject filter
+  //   const matchesSubject =
+  //     filterState.subjectFilter === "all" ||
+  //     (lead.subjects && lead.subjects.includes(filterState.subjectFilter));
 
-    return (
-      matchesSearch &&
-      matchesTab &&
-      matchesDateRange &&
-      matchesMonth &&
-      matchesYear &&
-      matchesDemoStatus &&
-      matchesBoard &&
-      matchesClass &&
-      matchesSubject
-    );
-  });
+  //   return (
+  //     matchesSearch &&
+  //     matchesTab &&
+  //     matchesDateRange &&
+  //     matchesMonth &&
+  //     matchesYear &&
+  //     matchesDemoStatus &&
+  //     matchesBoard &&
+  //     matchesClass &&
+  //     matchesSubject
+  //   );
+  // });
 
   // Pagination logic
-  const totalPages = Math.ceil(filteredLeads.length / filterState.itemsPerPage);
-  const startIndex = (filterState.currentPage - 1) * filterState.itemsPerPage;
-  const endIndex = startIndex + filterState.itemsPerPage;
-  const currentLeads = filteredLeads.slice(startIndex, endIndex);
+  // const totalPages = Math.ceil(filteredLeads.length / filterState.itemsPerPage);
+  // const startIndex = (filterState.currentPage - 1) * filterState.itemsPerPage;
+  // const endIndex = startIndex + filterState.itemsPerPage;
+  // const currentLeads = filteredLeads.slice(startIndex, endIndex);
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
@@ -693,18 +827,17 @@ export default function LeadsList() {
     });
   };
 
+  // Find the subadmin name for a given ID
+  const getSubadminName = (id: string | undefined) => {
+    if (!id) return '';
+    const sub = subadmins.find(s => s._id === id);
+    return sub ? sub.name : id;
+  };
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="text-center text-red-600">
-        <p>{error}</p>
       </div>
     );
   }
@@ -765,7 +898,7 @@ export default function LeadsList() {
         <div className="p-3">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-2xl font-bold text-black">
-              Name : {editingLead.studentName}
+             
             </h2>
             <button
               onClick={() => {
@@ -789,13 +922,13 @@ export default function LeadsList() {
               </svg>
             </button>
           </div>
-          {isLoadingTeachers ? (
+          {/* {isLoadingTeachers ? (
             <div className="flex justify-center items-center p-4">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
             </div>
           ) : (
             <div className="mb-6">
-              {/* <h3 className="text-lg font-semibold mb-2">Available Teachers</h3>
+              <h3 className="text-lg font-semibold mb-2">Available Teachers</h3>
               {teachers && teachers.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {teachers.map((teacher) => (
@@ -827,14 +960,14 @@ export default function LeadsList() {
                       </div>
                     </div>
                   ))}
-                </div> */}
+                </div>
               ) : (
                 <div className="text-center text-gray-500 py-4">
                   No teachers available for this subject/class combination
                 </div>
               )}
             </div>
-          )}
+          )} */}
           <DemoLeadForm
             lead={editingLead}
             onComplete={() => {
@@ -1181,171 +1314,332 @@ export default function LeadsList() {
           )}
 
           {/* Leads Table */}
-          <div className="bg-white shadow rounded-lg overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Student
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Contact
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Details
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Lead Status
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Created
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Demo
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Demo Status
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Enrollment
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {currentLeads.length === 0 ? (
+          {selectedTab !== 'assigned-to-me' && (
+            <div className="bg-white shadow rounded-lg overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
                     <tr>
-                      <td
-                        colSpan={8}
-                        className="px-6 py-4 text-center text-gray-500"
-                      >
-                        No leads found
-                      </td>
+                      <th className="px-2 py-3">
+                        <input
+                          type="checkbox"
+                          checked={selectAllLeads}
+                          onChange={handleSelectAllLeads}
+                        />
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Student
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Contact
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Details
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Lead Status
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Created
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Actions
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Demo
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Demo Status
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Enrollment
+                      </th>
                     </tr>
-                  ) : (
-                    currentLeads.map((lead) => {
-                      const leadData: Lead = {
-                        ...lead,
-                        subjects: lead.subjects || [],
-                        board: lead.board || "",
-                        class: lead.class || "",
-                        status: lead.status || "new",
-                      };
-                      return (
-                        <tr key={lead._id}>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm font-medium text-gray-900">
-                              {lead.studentName}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-gray-900">
-                              Student: {lead.studentPhone}
-                            </div>
-                            <div className="text-sm text-gray-900">
-                              Parent: {lead.parentPhone || "Not provided"}
-                            </div>
-                            <div className="text-sm text-gray-500">
-                              {lead.email}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-gray-900">
-                              {lead.board} - Class {lead.class}
-                            </div>
-                            <div className="text-sm text-gray-500">
-                              {lead.subjects.join(", ")}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span
-                              className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(
-                                lead.status
-                              )}`}
-                            >
-                              {lead.status.charAt(0).toUpperCase() +
-                                lead.status.slice(1).replace(/_/g, " ")}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {new Date(lead.createdAt).toLocaleDateString(
-                              "en-GB"
-                            )}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            <div className="flex flex-col items-start gap-1">
-                              <button
-                                onClick={() => handleEditClick(lead)}
-                                className="text-blue-600 hover:text-blue-900"
-                              >
-                                Edit
-                              </button>
-                              {/* <button
-                                onClick={() => handleDeleteLead(lead._id)}
-                                disabled={deleteLoading === lead._id}
-                                className="text-red-600 hover:text-red-900 disabled:opacity-50"
-                              >
-                                {deleteLoading === lead._id ? 'Deleting...' : 'Delete'}
-                              </button> */}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                            <button
-                              onClick={() => handleBookDemoClick(lead)}
-                              className="text-blue-600 hover:text-blue-900"
-                            >
-                              Book Demo
-                            </button>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            {lead.demo ? (
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {currentLeads.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan={8}
+                          className="px-6 py-4 text-center text-gray-500"
+                        >
+                          No leads found
+                        </td>
+                      </tr>
+                    ) : (
+                      currentLeads.map((lead) => {
+                        // No need to re-cast lead, just use lead directly
+                        return (
+                          <tr key={lead._id}>
+                            <td className="px-2 py-4">
+                              {(lead.assignedTo === null || lead.assignedTo === undefined) ? (
+                                <input
+                                  type="checkbox"
+                                  checked={selectedLeads.includes(lead._id)}
+                                  onChange={() => handleLeadCheckbox(lead._id)}
+                                />
+                              ) : (
+                                <span className="text-gray-400">Assigned{lead.assignedTo ? ` to ${getSubadminName(lead.assignedTo)}` : ''}</span>
+                              )}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm font-medium text-gray-900">
+                                {lead.studentName}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm text-gray-900">
+                                Student: {lead.studentPhone}
+                              </div>
+                              <div className="text-sm text-gray-900">
+                                Parent: {lead.parentPhone || "Not provided"}
+                              </div>
+                              <div className="text-sm text-gray-500">
+                                {lead.email}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm text-gray-900">
+                                {lead.board} - Class {lead.class}
+                              </div>
+                              <div className="text-sm text-gray-500">
+                                {lead.subjects.join(", ")}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
                               <span
                                 className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(
-                                  lead.demo.status
+                                  lead.status
                                 )}`}
                               >
-                                {lead.demo.status.charAt(0).toUpperCase() +
-                                  lead.demo.status.slice(1).replace(/_/g, " ")}
+                                {lead.status.charAt(0).toUpperCase() +
+                                  lead.status.slice(1).replace(/_/g, " ")}
                               </span>
-                            ) : (
-                              <span className="text-gray-500">No Demo</span>
-                            )}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                            {isStudentEnrolled(lead) ? (
-                              <div className="flex flex-col items-end gap-1">
-                                <span className="inline-block bg-green-100 text-green-800 px-2 py-1 rounded text-sm">
-                                  Enrolled
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              {new Date(lead.createdAt).toLocaleDateString(
+                                "en-GB"
+                              )}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                              <div className="flex flex-col items-start gap-1">
+                                <button
+                                  onClick={() => handleEditClick(lead)}
+                                  className="text-blue-600 hover:text-blue-900"
+                                >
+                                  Edit
+                                </button>
+                                {/* <button
+                                  onClick={() => handleDeleteLead(lead._id)}
+                                  disabled={deleteLoading === lead._id}
+                                  className="text-red-600 hover:text-red-900 disabled:opacity-50"
+                                >
+                                  {deleteLoading === lead._id ? 'Deleting...' : 'Delete'}
+                                </button> */}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                              <button
+                                onClick={() => handleBookDemoClick(lead)}
+                                className="text-blue-600 hover:text-blue-900"
+                              >
+                                Book Demo
+                              </button>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              {lead.demo ? (
+                                <span
+                                  className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(
+                                    lead.demo.status
+                                  )}`}
+                                >
+                                  {lead.demo.status.charAt(0).toUpperCase() +
+                                    lead.demo.status.slice(1).replace(/_/g, " ")}
                                 </span>
+                              ) : (
+                                <span className="text-gray-500">No Demo</span>
+                              )}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                              {isStudentEnrolled(lead) ? (
+                                <div className="flex flex-col items-end gap-1">
+                                  <span className="inline-block bg-green-100 text-green-800 px-2 py-1 rounded text-sm">
+                                    Enrolled
+                                  </span>
+                                  <button
+                                    onClick={() => handleEnrollClick(lead)}
+                                    disabled={enrollmentLoading}
+                                    className="text-blue-600 hover:text-blue-900 text-xs disabled:opacity-50"
+                                  >
+                                    {enrollmentLoading ? "Loading..." : "Update"}
+                                  </button>
+                                </div>
+                              ) : (
                                 <button
                                   onClick={() => handleEnrollClick(lead)}
                                   disabled={enrollmentLoading}
-                                  className="text-blue-600 hover:text-blue-900 text-xs disabled:opacity-50"
+                                  className="text-blue-600 hover:text-blue-900 disabled:opacity-50"
                                 >
-                                  {enrollmentLoading ? "Loading..." : "Update"}
+                                  {enrollmentLoading ? "Loading..." : "Enroll"}
                                 </button>
-                              </div>
-                            ) : (
-                              <button
-                                onClick={() => handleEnrollClick(lead)}
-                                disabled={enrollmentLoading}
-                                className="text-blue-600 hover:text-blue-900 disabled:opacity-50"
-                              >
-                                {enrollmentLoading ? "Loading..." : "Enroll"}
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* Assign to Subadmin Button */}
+          {selectedTab !== 'assigned-to-me' && (
+            <div className="flex items-center mb-2">
+              <button
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 mr-4"
+                disabled={selectedLeads.length === 0}
+                onClick={() => setShowAssignModal(true)}
+              >
+                Assign to Subadmin
+              </button>
+              {selectedLeads.length > 0 && (
+                <span className="text-sm text-gray-600">{selectedLeads.length} leads selected</span>
+              )}
+            </div>
+          )}
+          {/* Assign Modal */}
+          {showAssignModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-30">
+              <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-md">
+                <h2 className="text-xl font-bold mb-4">Assign Leads to Subadmin</h2>
+                <label className="block mb-2 font-medium">Select Subadmin</label>
+                <select
+                  className="w-full border px-3 py-2 rounded mb-4"
+                  value={selectedSubadmin}
+                  onChange={e => setSelectedSubadmin(e.target.value)}
+                >
+                  <option value="">Select...</option>
+                  {subadmins.map(sa => (
+                    <option key={sa._id} value={sa._id}>{sa.name} ({sa.email})</option>
+                  ))}
+                </select>
+                <button
+                  className="w-full bg-blue-600 text-white py-2 rounded font-semibold hover:bg-blue-700 disabled:opacity-50 mb-2"
+                  disabled={!selectedSubadmin || assignLoading}
+                  onClick={handleAssignLeads}
+                >
+                  {assignLoading ? "Assigning..." : "Assign"}
+                </button>
+                {assignMessage && <div className="text-center text-sm text-red-600 mb-2">{assignMessage}</div>}
+                <button
+                  className="w-full bg-gray-200 text-gray-700 py-2 rounded font-semibold hover:bg-gray-300"
+                  onClick={() => setShowAssignModal(false)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+          {selectedTab !== 'assigned-to-me' && (
+            <div className="mb-8 p-4 bg-white rounded shadow">
+              <h2 className="text-lg font-bold mb-2">Assigned Leads</h2>
+              <label className="block mb-2 font-medium">Select Subadmin</label>
+              <select
+                className="w-full border px-3 py-2 rounded mb-4"
+                value={selectedAssignedSubadmin}
+                onChange={e => setSelectedAssignedSubadmin(e.target.value)}
+              >
+                <option value="">Select...</option>
+                {subadmins.map(sa => (
+                  <option key={sa._id} value={sa._id}>{sa.name} ({sa.email})</option>
+                ))}
+              </select>
+              {loadingAssignedLeads ? (
+                <div className="text-gray-500">Loading assigned leads...</div>
+              ) : assignedLeads.length === 0 && selectedAssignedSubadmin ? (
+                <div className="text-gray-500">No leads assigned to this subadmin.</div>
+              ) : (
+                <ul className="divide-y divide-gray-200">
+                  {assignedLeads.map(lead => (
+                    <li key={lead._id} className="py-2">
+                      <span className="font-medium">{lead.studentName}</span> - {lead.email} - {lead.status}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+          {/* Show assigned leads for the logged-in user when 'Assigned to Me' tab is selected */}
+          {selectedTab === 'assigned-to-me' && (
+            <div className="bg-white shadow rounded-lg overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Details</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Lead Status</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Demo</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Demo Status</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Enrollment</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {myAssignedLeads.map((lead) => (
+                      <tr key={lead._id}>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm font-medium text-gray-900">{lead.studentName}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">Student: {lead.studentPhone}</div>
+                          <div className="text-sm text-gray-900">Parent: {lead.parentPhone || "Not provided"}</div>
+                          <div className="text-sm text-gray-500">{lead.email}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">{lead.board} - Class {lead.class}</div>
+                          <div className="text-sm text-gray-500">{Array.isArray(lead.subjects) ? lead.subjects.join(", ") : lead.subjects}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(lead.status)}`}>{lead.status.charAt(0).toUpperCase() + lead.status.slice(1).replace(/_/g, " ")}</span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{lead.createdAt ? new Date(lead.createdAt).toLocaleDateString("en-GB") : ""}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <div className="flex flex-col items-start gap-1">
+                            <button onClick={() => handleEditClick(lead)} className="text-blue-600 hover:text-blue-900">Edit</button>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                          <button onClick={() => handleBookDemoClick(lead)} className="text-blue-600 hover:text-blue-900">Book Demo</button>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          {lead.demo ? (
+                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(lead.demo.status)}`}>{lead.demo.status.charAt(0).toUpperCase() + lead.demo.status.slice(1).replace(/_/g, " ")}</span>
+                          ) : (
+                            <span className="text-gray-500">No Demo</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                          {isStudentEnrolled(lead) ? (
+                            <div className="flex flex-col items-end gap-1">
+                              <span className="inline-block bg-green-100 text-green-800 px-2 py-1 rounded text-sm">Enrolled</span>
+                              <button onClick={() => handleEnrollClick(lead)} disabled={enrollmentLoading} className="text-blue-600 hover:text-blue-900 text-xs disabled:opacity-50">{enrollmentLoading ? "Loading..." : "Update"}</button>
+                            </div>
+                          ) : (
+                            <button onClick={() => handleEnrollClick(lead)} disabled={enrollmentLoading} className="text-blue-600 hover:text-blue-900 disabled:opacity-50">{enrollmentLoading ? "Loading..." : "Enroll"}</button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>

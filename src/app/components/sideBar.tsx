@@ -2,11 +2,51 @@
 'use client';
 
 import Link from "next/link";
+import React, { useEffect, useState } from "react";
 
-const SideBar = ({ children }) => {
+// Mapping from backend page names to sidebar keys
+const PAGE_KEY_MAP: Record<string, string> = {
+  "create leads": "leads",
+  "show leads": "leads",
+  "show emrollment": "enrollment",
+  "show emrollments": "enrollment", // typo/variant supported
+  // Add more mappings as needed
+};
+
+const SideBar = ({ children }: { children?: React.ReactNode }) => {
+  const [pages, setPages] = useState<string[]>([]);
+  const [showAll, setShowAll] = useState(false);
+
+  useEffect(() => {
+    const updatePages = () => {
+      const admin = localStorage.getItem("admin");
+      if (admin) {
+        const parsed = JSON.parse(admin);
+        let allowed = parsed.allowedPages || [];
+        if (allowed === "all" || (Array.isArray(allowed) && allowed.includes("all"))) {
+          setShowAll(true);
+          setPages([]); // Not used when showAll is true
+        } else if (Array.isArray(allowed)) {
+          allowed = allowed.map((page: string) => PAGE_KEY_MAP[page]).filter(Boolean);
+          setShowAll(false);
+          setPages(allowed);
+        } else {
+          setShowAll(false);
+          setPages([]);
+        }
+      } else {
+        setShowAll(false);
+        setPages([]);
+      }
+    };
+    updatePages(); // initial load
+    window.addEventListener("admin-updated", updatePages);
+    return () => window.removeEventListener("admin-updated", updatePages);
+  }, []);
 
   const menuItems = [
     { 
+      key: "dashboard",
       name: "Dashboard", 
       path: "/dashboard",
       icon: (
@@ -17,6 +57,7 @@ const SideBar = ({ children }) => {
       )
     },
     { 
+      key: "leads",
       name: "Create Leads", 
       path: "/leads/addLead",
       icon: (
@@ -26,6 +67,7 @@ const SideBar = ({ children }) => {
       )
     },
     {
+      key: "leads",
       name: "Show Leads", 
       path: "/leads",
       icon: (
@@ -35,6 +77,7 @@ const SideBar = ({ children }) => {
       )
     },
     {
+      key: "enrollment",
       name: "Show Enrollment", 
       path: "/enrollment",
       icon: (
@@ -45,6 +88,7 @@ const SideBar = ({ children }) => {
     },
    
     {
+      key: "teachers",
       name: "Teacher Application", 
       path: "/teachers",
       icon: (
@@ -54,6 +98,7 @@ const SideBar = ({ children }) => {
       )
     },
     { 
+      key: "enroll-teacher",
       name: "Enroll Teacher", 
       path: "create-teacher-cred",
       icon: (
@@ -63,6 +108,7 @@ const SideBar = ({ children }) => {
       )
     },
     {
+      key: "enrolled-teachers",
       name: "Enrolled Teachers", 
       path: "/all-teachers",
       icon: (
@@ -72,6 +118,7 @@ const SideBar = ({ children }) => {
       )
     },
     { 
+      key: "create-course",
       name: "Create Course", 
       path: "/create-course",
       icon: (
@@ -81,6 +128,17 @@ const SideBar = ({ children }) => {
       )
     },
     { 
+      key: "create-subadmin",
+      name: "Create Subadmin", 
+      path: "/create-subadmin",
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+        </svg>
+      )
+    },
+    { 
+      key: "settings",
       name: "Settings", 
       path: "/settings",
       icon: (
@@ -91,6 +149,7 @@ const SideBar = ({ children }) => {
       )
     },
      { 
+      key: "minute-price",
       name: "Custom Price change", 
       path: "/minute-price",
       icon: (
@@ -140,8 +199,8 @@ const SideBar = ({ children }) => {
           {/* Navigation */}
           <nav className="flex-1 px-2 py-2">
             <ul className="space-y-1">
-              {menuItems.map((item) => {
-                return (
+              {(showAll ? menuItems : menuItems.filter(item => pages.includes(item.key)))
+                .map((item) => (
                   <li key={item.name}>
                     <Link 
                       href={item.path}
@@ -153,8 +212,7 @@ const SideBar = ({ children }) => {
                       <span className="font-medium text-sm">{item.name}</span>
                     </Link>
                   </li>
-                );
-              })}
+                ))}
             </ul>
           </nav>
         </aside>
@@ -183,7 +241,19 @@ const SideBar = ({ children }) => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
                 </svg>
               </button>
-
+              {/* Logout Button */}
+              <button
+                className="p-2 text-red-500 hover:text-red-700 transition-colors border border-red-200 rounded"
+                onClick={() => {
+                  localStorage.clear();
+                  window.location.href = "/login";
+                }}
+                title="Logout"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a2 2 0 01-2 2H7a2 2 0 01-2-2V7a2 2 0 012-2h4a2 2 0 012 2v1" />
+                </svg>
+              </button>
               {/* Profile */}
               <div className="flex items-center space-x-3">
                 <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
