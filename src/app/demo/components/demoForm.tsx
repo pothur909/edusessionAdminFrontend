@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 interface Lead {
   _id: string;
@@ -55,15 +56,17 @@ interface Teacher {
 
 interface DemoLeadFormProps {
   lead: Lead;
-  onComplete: () => void;
-  onCancel: () => void;
   teachers: Teacher[];
+  demos?: Demo[];
 }
 
-export default function DemoLeadForm({ lead, onComplete, onCancel, teachers }: DemoLeadFormProps) {
+export type { Lead, Teacher, Demo };
+
+export default function DemoLeadForm({ lead, teachers, demos }: DemoLeadFormProps) {
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [selectedSubject, setSelectedSubject] = useState('');
-  const [existingDemos, setExistingDemos] = useState<Demo[]>([]);
+  const [existingDemos, setExistingDemos] = useState<Demo[]>(demos || []);
   const [newSubject, setNewSubject] = useState('');
   const [showAddSubject, setShowAddSubject] = useState(false);
   const [isViewMode, setIsViewMode] = useState(false);
@@ -89,7 +92,7 @@ export default function DemoLeadForm({ lead, onComplete, onCancel, teachers }: D
   });
 
   useEffect(() => {
-    fetchExistingDemos();
+    if (!demos) fetchExistingDemos();
   }, []);
 
   useEffect(() => {
@@ -325,8 +328,7 @@ export default function DemoLeadForm({ lead, onComplete, onCancel, teachers }: D
         if (formData.status === 'completed' || formData.status === 'rescheduled_completed') {
           alert('Demo completed! You can now schedule demos for other subjects.');
         }
-        
-        onComplete();
+        // Do not call onComplete, just stay on the page
       } else {
         throw new Error(data.message || 'Failed to save demo');
       }
@@ -671,7 +673,7 @@ export default function DemoLeadForm({ lead, onComplete, onCancel, teachers }: D
                   <div className="flex space-x-3 pt-4">
                     <button
                       type="button"
-                      onClick={onCancel}
+                      onClick={() => router.back()}
                       className="flex-1 px-4 py-2 border text-gray-700 rounded hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-gray-400 transition-colors"
                     >
                       Cancel

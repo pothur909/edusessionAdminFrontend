@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 interface Lead {
   _id: string;
@@ -122,7 +123,8 @@ interface StudentResponse {
   data?: Enrollment;
 }
 
-export default function EnrollmentForm({ lead, onComplete, onCancel, teachers }: EnrollmentFormProps) {
+export default function EnrollmentForm({ lead, onComplete, teachers }: EnrollmentFormProps) {
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [fetchingData, setFetchingData] = useState(true);
   const [demo, setDemo] = useState<Demo | null>(null);
@@ -292,7 +294,10 @@ export default function EnrollmentForm({ lead, onComplete, onCancel, teachers }:
           }
         }
 
+        // Force isEditing and existingStudentId if lead.existingStudentId is present
         if (lead.existingStudentId) {
+          setIsEditing(true);
+          setExistingStudentId(lead.existingStudentId);
           try {
             console.log('Fetching existing student with ID:', lead.existingStudentId);
             const response = await fetch(`${baseUrl}/api/students/${lead.existingStudentId}`);
@@ -302,9 +307,6 @@ export default function EnrollmentForm({ lead, onComplete, onCancel, teachers }:
             const existingEnrollment = Array.isArray(data) ? data[0] : data;
 
             if (existingEnrollment) {
-              setIsEditing(true);
-              setExistingStudentId(existingEnrollment._id);
-
               setFormData({
                 _id: existingEnrollment._id,
                 lead: lead._id,
@@ -355,6 +357,9 @@ export default function EnrollmentForm({ lead, onComplete, onCancel, teachers }:
           } catch (error) {
             console.error('Error fetching existing student:', error);
           }
+        } else {
+          setIsEditing(false);
+          setExistingStudentId(null);
         }
 
         initializeFormWithLeadData();
@@ -611,15 +616,22 @@ export default function EnrollmentForm({ lead, onComplete, onCancel, teachers }:
 
       const submitData = { ...formData };
 
-      if (!isEditing) {
+      // Remove _id if not editing
+      if (!existingStudentId) {
         delete submitData._id;
       }
 
-      const url = isEditing && existingStudentId
+      // Format phone number to +91XXXXXXXXXX before submitting
+      if (submitData.phoneNumber && !submitData.phoneNumber.startsWith('+91')) {
+        submitData.phoneNumber = `+91${submitData.phoneNumber}`;
+      }
+
+      // Determine if we are editing or creating
+      const isUpdate = Boolean(existingStudentId);
+      const url = isUpdate
         ? `${baseUrl}/api/students/${existingStudentId}`
         : `${baseUrl}/api/students`;
-
-      const method = isEditing ? 'PUT' : 'POST';
+      const method = isUpdate ? 'PUT' : 'POST';
 
       console.log('Submitting enrollment data:', submitData);
       console.log('URL:', url);
@@ -637,7 +649,13 @@ export default function EnrollmentForm({ lead, onComplete, onCancel, teachers }:
       console.log('Enrollment response:', responseData);
 
       if (!response.ok) {
-        throw new Error(responseData.message || responseData.error || `Failed to ${isEditing ? 'update' : 'enroll'} student`);
+        // Check for duplicate key error
+        if (responseData.error && responseData.error.includes('duplicate key error')) {
+          setError('A student with this email already exists. Please use a different email or edit the existing enrollment.');
+          setLoading(false);
+          return;
+        }
+        throw new Error(responseData.message || responseData.error || `Failed to ${isUpdate ? 'update' : 'enroll'} student`);
       }
 
       const studentId = responseData._id;
@@ -739,6 +757,27 @@ export default function EnrollmentForm({ lead, onComplete, onCancel, teachers }:
         }
       }
 
+      // After enrollment is created/updated, update the lead as well
+      const leadUpdateFields = {
+        studentName: submitData.studentName,
+        studentPhone: submitData.phoneNumber,
+        email: submitData.email,
+        city: submitData.city,
+        address: submitData.address,
+        counsellor: submitData.counsellor,
+        // Add more fields as needed
+      };
+      try {
+        await fetch(`${baseUrl}/api/leads/editlead/${lead._id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(leadUpdateFields),
+        });
+      } catch (err) {
+        console.error('Failed to update lead after enrollment:', err);
+      }
+
+      alert('Enrollment complete successfully');
       onComplete();
     } catch (error) {
       console.error('Error in handleSubmit:', error);
@@ -1103,8 +1142,8 @@ export default function EnrollmentForm({ lead, onComplete, onCancel, teachers }:
         <div className="flex justify-end space-x-4">
           <button
             type="button"
-            onClick={onCancel}
-            className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+            onClick={() => router.back()}
+            className="px-4 py-2 border text-gray-700 rounded hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-gray-400 transition-colors"
           >
             Cancel
           </button>
