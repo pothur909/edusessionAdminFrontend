@@ -118,7 +118,7 @@ const indianLanguageOptions = [
   'Garhwali'
 ];
 
-const baseUrl = process.env.BASE_URL || "http://localhost:6969";
+const baseUrl = process.env.BASE_URL ;
 
 export default function TeacherForm({
   initialData,

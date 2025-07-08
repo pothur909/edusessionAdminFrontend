@@ -1,13 +1,15 @@
 import EnrollmentAddForm from '../../../enrollment/components/enrollmentAddForm';
 
+const baseUrl = process.env.BASE_URL
+
 async function fetchLeadById(leadId: string) {
-  const res = await fetch(`${process.env.BASE_URL || 'http://localhost:6969'}/api/leads/lead/${leadId}`);
+  const res = await fetch(`${baseUrl}/api/leads/lead/${leadId}`);
   if (!res.ok) throw new Error('Failed to fetch lead');
   return res.json();
 }
 
 async function fetchTeachers(board: string, className: string, subject: string) {
-  const res = await fetch(`${process.env.BASE_URL || 'http://localhost:6969'}/api/session/fetchTeacherByCardId`, {
+  const res = await fetch(`${baseUrl}/api/session/fetchTeacherByCardId`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -24,7 +26,7 @@ async function fetchTeachers(board: string, className: string, subject: string) 
 }
 
 async function fetchEnrollmentByLeadIdOrEmail(leadId: string, email: string) {
-  const res = await fetch(`${process.env.BASE_URL || 'http://localhost:6969'}/api/students`);
+  const res = await fetch(`${baseUrl}/api/students`);
   if (!res.ok) throw new Error('Failed to fetch enrollments');
   const data = await res.json();
   if (data.success && data.data) {
@@ -40,7 +42,7 @@ export default async function NewEnrollmentPage(props: { params: { leadId: strin
   let lead, error = null;
 
   try {
-    const res = await fetch('http://localhost:6969/api/leads/lead/' + leadId, { cache: 'no-store' });
+    const res = await fetch(`${baseUrl}/api/leads/lead/` + leadId, { cache: 'no-store' });
     const data = await res.json();
     lead = data.lead; // <-- This is correct!
   } catch (err: any) {

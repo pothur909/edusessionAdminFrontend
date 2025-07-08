@@ -148,7 +148,7 @@ const TeachersListShow = () => {
   const [openInterviewDetailsDialog, setOpenInterviewDetailsDialog] = useState(false);
   const [selectedInterviewDetails, setSelectedInterviewDetails] = useState<InterviewDetails | null>(null);
 
-  const baseUrl = process.env.BASE_URL || "http://localhost:6969";
+  const baseUrl = process.env.BASE_URL ;
 
   const {
     filterState,

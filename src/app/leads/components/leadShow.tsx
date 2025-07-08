@@ -120,6 +120,22 @@ interface Enrollment {
   subjects?: Subject[]; // Add this line
 }
 
+interface EnrollmentResponse {
+  success: boolean;
+  message: string;
+  demos?: Demo[];
+  enroll?: Enrollment[];
+  lead?: {
+    studentName: string;
+    studentPhone: string;
+    parentPhone: string;
+    city: string;
+    email: string;
+    board: string;
+    class: string;
+  };
+}
+
 const LEAD_TABS = [
   { label: 'Doubt Session', value: 'doubt session' },
   { label: 'One to One', value: '1 to 1' },
@@ -132,9 +148,12 @@ function categorizeLead(lead: Lead) {
   return lead.sessionType;
 }
 
+const baseUrl = process.env.BASE_URL
+
 export default function LeadsList() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [isLoadingTeachers, setIsLoadingTeachers] = useState(false);
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
@@ -246,7 +265,7 @@ export default function LeadsList() {
   // Fetch subadmins when modal opens
   useEffect(() => {
     if (showAssignModal) {
-      fetch("http://localhost:6969/api/leads/subadmins")
+      fetch(`${baseUrl}/api/leads/subadmins`)
         .then(res => res.json())
         .then(data => {
           if (data.success) setSubadmins(data.data);
@@ -258,7 +277,7 @@ export default function LeadsList() {
   useEffect(() => {
     if (selectedAssignedSubadmin) {
       setLoadingAssignedLeads(true);
-      fetch(`http://localhost:6969/api/leads/assigned-leads/${selectedAssignedSubadmin}`)
+      fetch(`${baseUrl}/api/leads/assigned-leads/${selectedAssignedSubadmin}`)
         .then(res => res.json())
         .then(data => {
           if (data.success) setAssignedLeads(data.data);
@@ -280,7 +299,7 @@ export default function LeadsList() {
           if (admin && admin._id) {
             setMyUserId(admin._id);
             setLoadingMyAssignedLeads(true);
-            fetch(`http://localhost:6969/api/leads/assigned-leads/${admin._id}`)
+            fetch(`${baseUrl}/api/leads/assigned-leads/${admin._id}`)
               .then(res => res.json())
               .then(data => {
                 if (data.success) setMyAssignedLeads(data.data);
@@ -314,7 +333,7 @@ export default function LeadsList() {
     setAssignLoading(true);
     setAssignMessage("");
     try {
-      const res = await fetch("http://localhost:6969/api/leads/assign-lead", {
+      const res = await fetch(`${baseUrl}/api/leads/assign-lead`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ leadIds: selectedLeads, subadminId: selectedSubadmin })
@@ -382,7 +401,7 @@ export default function LeadsList() {
     fetchEnrolledStudents(); // Add this line to fetch enrolled students on component mount
   }, [filterState.statusFilter]);
 
-  const baseUrl =process.env.BASE_URL;
+  // const baseUrl =process.env.BASE_URL;
 
   const fetchLeads = async () => {
     try {
@@ -480,7 +499,7 @@ export default function LeadsList() {
     try {
       setIsLoadingTeachers(true);
       const response = await fetch(
-        "http://localhost:6969/api/session/fetchTeacherByCardId",
+        `${baseUrl}/api/session/fetchTeacherByCardId`,
         {
           method: "POST",
           headers: {
@@ -1437,7 +1456,8 @@ export default function LeadsList() {
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                               <button
-                                onClick={() => handleBookDemoClick(lead)}
+                               onClick={() => router.push(`/demo/book/${lead._id}`)}
+                              disabled={enrollmentLoading}
                                 className="text-blue-600 hover:text-blue-900"
                               >
                                 Book Demo
@@ -1458,27 +1478,21 @@ export default function LeadsList() {
                               )}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                              {isStudentEnrolled(lead) ? (
-                                <div className="flex flex-col items-end gap-1">
-                                  <span className="inline-block bg-green-100 text-green-800 px-2 py-1 rounded text-sm">
-                                    Enrolled
-                                  </span>
-                                  <button
-                                    onClick={() => handleEnrollClick(lead)}
-                                    disabled={enrollmentLoading}
-                                    className="text-blue-600 hover:text-blue-900 text-xs disabled:opacity-50"
-                                  >
-                                    {enrollmentLoading ? "Loading..." : "Update"}
-                                  </button>
-                                </div>
-                              ) : (
-                                <button
-                                  onClick={() => handleEnrollClick(lead)}
-                                  disabled={enrollmentLoading}
-                                  className="text-blue-600 hover:text-blue-900 disabled:opacity-50"
-                                >
-                                  {enrollmentLoading ? "Loading..." : "Enroll"}
-                                </button>
+                               {isStudentEnrolled(lead) ? (
+                              <button
+                                className="bg-green-500 text-white px-4 py-2 rounded-full cursor-default"
+                                disabled
+                              >
+                                Enrolled
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => router.push(`/leads/newEnrollment/${lead._id}`)}
+                                disabled={enrollmentLoading}
+                                className="bg-blue-600 text-white px-4 py-2 rounded-full hover:bg-blue-700 disabled:opacity-50"
+                              >
+                                Enroll Now
+                              </button>
                               )}
                             </td>
                           </tr>

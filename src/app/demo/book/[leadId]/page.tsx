@@ -6,7 +6,7 @@ interface BookDemoPageProps {
   params: { leadId: string };
 }
 
-const baseUrl = 'http://localhost:6969'; // Hardcoded for reliability
+const baseUrl =  process.env.BASE_URL ; // Hardcoded for reliability
 
 async function fetchLeadById(leadId: string): Promise<Lead> {
   const res = await fetch(`${baseUrl}/api/leads/lead/${leadId}`, {
@@ -17,7 +17,7 @@ async function fetchLeadById(leadId: string): Promise<Lead> {
 }
 
 // async function fetchDemosByLeadId(leadId: string): Promise<Demo[]> {
-//   const res = await fetch(`${process.env.BASE_URL || 'http://localhost:6969'}/api/demo/view/${leadId}`);
+//   const res = await fetch(`${baseUrl}/api/demo/view/${leadId}`);
 //   if (res.status === 404) return [];
 //   if (!res.ok) throw new Error('Failed to fetch demos');
 //   const data = await res.json();

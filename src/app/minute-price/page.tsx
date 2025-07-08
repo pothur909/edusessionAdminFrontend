@@ -13,7 +13,7 @@
 //     fetchCurrentRate();
 //   }, []);
 
-//    const baseUrl = process.env.BASE_URL || "http://localhost:6969";
+//    const baseUrl = process.env.BASE_URL ;
 
 //   const fetchCurrentRate = async () => {
 //     try {
@@ -154,7 +154,7 @@ export default function MinutesRateManager() {
     fetchCurrentRate();
   }, []);
 
- const baseUrl = process.env.BASE_URL || "http://localhost:6969";
+ const baseUrl = process.env.BASE_URL ;
 
   const fetchCurrentRate = async () => {
     try {

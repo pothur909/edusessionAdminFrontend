@@ -22,6 +22,8 @@ const ROLES = [
   { label: "Admin", value: "admin" },
 ];
 
+const baseUrl = process.env.BASE_URL
+
 export default function CreateSubadminPage() {
   const [form, setForm] = useState({
     name: "",
@@ -64,7 +66,7 @@ export default function CreateSubadminPage() {
     setLoading(true);
     setMessage("");
     try {
-      const res = await fetch("http://localhost:6969/api/admin/create-subadmin", {
+      const res = await fetch(`${baseUrl}/api/admin/create-subadmin`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
