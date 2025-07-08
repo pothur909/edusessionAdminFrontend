@@ -65,6 +65,7 @@ interface Lead {
   city: string;
   existingStudentId?: string;
   demo?: Demo | null;
+  sessionType?: string; // Added for new tab logic
 }
 
 interface DemoResponse {
@@ -136,6 +137,17 @@ interface EnrollmentResponse {
   };
 }
 
+const LEAD_TABS = [
+  { label: 'Doubt Session', value: 'doubt session' },
+  { label: 'One to One', value: '1 to 1' },
+  { label: 'Admin Created', value: 'admin' },
+];
+
+function categorizeLead(lead: Lead) {
+  if (!lead.sessionType) return 'admin';
+  return lead.sessionType;
+}
+
 export default function LeadsList() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -152,6 +164,8 @@ export default function LeadsList() {
   const [enrolledStudents, setEnrolledStudents] = useState<Enrollment[]>([]);
   const [showEnrollmentForm, setShowEnrollmentForm] = useState(false);
   const [enrollmentLoading, setEnrollmentLoading] = useState(false);
+
+  const [selectedTab, setSelectedTab] = useState('doubt session');
 
   const {
     filterState,
@@ -542,7 +556,10 @@ export default function LeadsList() {
     setShowEnrollmentForm(false);
   };
 
-  const filteredLeads = leads.filter((lead) => {
+  // Tab + filter logic
+  const tabFilteredLeads = leads.filter(lead => categorizeLead(lead) === selectedTab);
+
+  const filteredLeads = tabFilteredLeads.filter((lead) => {
     const searchLower = filterState.searchQuery.toLowerCase();
     const studentName = lead.studentName?.toLowerCase() || "";
     const studentPhone = lead.studentPhone || "";
@@ -671,7 +688,7 @@ export default function LeadsList() {
     }));
 
     exportToExcel(data, columns, {
-      filename: 'leads.xlsx',
+      filename: `leads-${selectedTab}.xlsx`,
       sheetName: 'Leads'
     });
   };
@@ -694,6 +711,18 @@ export default function LeadsList() {
 
   return (
     <div className="space-y-6 text-black m-9">
+      {/* Tabs for lead categories */}
+      <div className="flex space-x-2 mb-4">
+        {LEAD_TABS.map(tab => (
+          <button
+            key={tab.value}
+            className={`px-4 py-2 rounded-lg font-medium transition-colors border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 ${selectedTab === tab.value ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-blue-50'}`}
+            onClick={() => setSelectedTab(tab.value)}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
       {!showEditForm && !showEnrollmentForm && !bookDemoForm && (
         <div className="flex justify-between items-center">
           <h1 className="text-2xl font-bold">Sales Leads</h1>

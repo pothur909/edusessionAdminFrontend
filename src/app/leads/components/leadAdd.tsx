@@ -818,24 +818,7 @@ export function LeadForm({ formData, setFormData, teachers }: {
           )}
         </div>
 
-        {/* Counsellor */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Counsellor
-          </label>
-          <input
-            type="text"
-            name="counsellor"
-            value={formData.counsellor}
-            onChange={handleChange}
-            className="w-full border border-gray-300 p-3 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            
-          />
-          {errors.counsellor && (
-            <p className="text-red-500 text-sm mt-1">{errors.counsellor}</p>
-          )}
-        </div>
-
+       
         {/* Session Begin Date */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -890,6 +873,25 @@ export function LeadForm({ formData, setFormData, teachers }: {
             </p>
           )}
         </div>
+
+         {/* Counsellor */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Counsellor
+          </label>
+          <input
+            type="text"
+            name="counsellor"
+            value={formData.counsellor}
+            onChange={handleChange}
+            className="w-full border border-gray-300 p-3 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            
+          />
+          {errors.counsellor && (
+            <p className="text-red-500 text-sm mt-1">{errors.counsellor}</p>
+          )}
+        </div>
+
 
         {/* Remarks */}
         <div>
