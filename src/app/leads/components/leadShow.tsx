@@ -433,10 +433,7 @@ export default function LeadsList() {
 
   const isStudentEnrolled = (lead: Lead) => {
     return enrolledStudents.some(
-      (student) =>
-        (student.email &&
-          student.email.toLowerCase() === lead.email?.toLowerCase()) ||
-        (student.phoneNumber && student.phoneNumber === lead.studentPhone)
+      (student) => student.phoneNumber === lead.studentPhone
     );
   };
 
