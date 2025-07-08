@@ -20,7 +20,8 @@ interface TeacherFormData {
   phoneNumber: string;
   password: string;
   searchCards: string[];
-  timeSlots: { value: string; isAvailable: boolean }[];
+  startTime: string;
+  endTime: string;
 }
 
 const AdminTeacherDashboard = () => {
@@ -32,28 +33,14 @@ const AdminTeacherDashboard = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showForm, setShowForm] = useState(false);
   
-  // Generate time slots from 12 AM to 11 PM
-  const generateTimeSlots = () => {
-    const slots = [];
-    for (let hour = 0; hour < 24; hour++) {
-      const period = hour >= 12 ? 'PM' : 'AM';
-      const nextHour = (hour + 1) % 24;
-      const nextPeriod = nextHour >= 12 ? 'PM' : 'AM';
-      const displayHour = hour % 12 || 12;
-      const nextDisplayHour = nextHour % 12 || 12;
-      const timeString = `${displayHour}:00 ${period} to ${nextDisplayHour}:00 ${nextPeriod}`;
-      slots.push({ value: timeString, isAvailable: false });
-    }
-    return slots;
-  };
-
   const [formData, setFormData] = useState<TeacherFormData>({
     fullName: '',
     email: '',
     phoneNumber: '',
     password: '',
     searchCards: [],
-    timeSlots: generateTimeSlots()
+    startTime: '',
+    endTime: ''
   });
 
   // Fetch search cards from API
@@ -76,68 +63,6 @@ const AdminTeacherDashboard = () => {
   useEffect(() => {
     fetchSearchCards();
   }, []);
-
-  // Handle time slot availability toggle
-  const handleTimeSlotToggle = (index: number) => {
-    setFormData(prev => ({
-      ...prev,
-      timeSlots: prev.timeSlots.map((slot, i) => 
-        i === index ? { ...slot, isAvailable: !slot.isAvailable } : slot
-      )
-    }));
-  };
-
-  // Create teacher with API
-  const handleCreateTeacher = async () => {
-    if (selectedCards.length === 0) {
-      alert('Please select at least one search card');
-      return;
-    }
-
-    // Filter only selected time slots
-    const selectedTimeSlots = formData.timeSlots.filter(slot => slot.isAvailable);
-
-    if (selectedTimeSlots.length === 0) {
-      alert('Please select at least one time slot');
-      return;
-    }
-
-    setLoading(true);
-    setError('');
-
-    try {
-      const payload = {
-        fullName: formData.fullName,
-        email: formData.email,
-        phoneNumber: formData.phoneNumber,
-        password: formData.password,
-        searchCards: selectedCards,
-        timeSlots: selectedTimeSlots
-      };
-
-      await api.post('/admin/create-teacher-credentials', payload);
-      
-      // Reset form and close
-      setFormData({
-        fullName: '',
-        email: '',
-        phoneNumber: '',
-        password: '',
-        searchCards: [],
-        timeSlots: generateTimeSlots()
-      });
-      setSelectedCards([]);
-      setShowForm(false);
-      
-      alert('Teacher created successfully!');
-    } catch (err) {
-      const errorMessage = err.response?.data?.message || 'Failed to create teacher';
-      setError(errorMessage);
-      console.error('Error creating teacher:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   // Handle input changes
   const handleInputChange = (field: keyof TeacherFormData, value: string) => {
@@ -193,6 +118,51 @@ const AdminTeacherDashboard = () => {
   // Get card type label
   const getCardTypeLabel = (type: 1 | 2) => {
     return type === 1 ? 'Doubt Session' : 'One-to-One';
+  };
+
+  // Create teacher with API
+  const handleCreateTeacher = async () => {
+    if (selectedCards.length === 0) {
+      alert('Please select at least one search card');
+      return;
+    }
+    if (!formData.startTime || !formData.endTime) {
+      alert('Please enter both start time and end time');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      const payload = {
+        fullName: formData.fullName,
+        email: formData.email,
+        phoneNumber: formData.phoneNumber,
+        password: formData.password,
+        searchCards: selectedCards,
+        startTime: formData.startTime,
+        endTime: formData.endTime
+      };
+      await api.post('/admin/create-teacher-credentials', payload);
+      // Reset form and close
+      setFormData({
+        fullName: '',
+        email: '',
+        phoneNumber: '',
+        password: '',
+        searchCards: [],
+        startTime: '',
+        endTime: ''
+      });
+      setSelectedCards([]);
+      setShowForm(false);
+      alert('Teacher created successfully!');
+    } catch (err) {
+      const errorMessage = err.response?.data?.message || 'Failed to create teacher';
+      setError(errorMessage);
+      console.error('Error creating teacher:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -294,30 +264,88 @@ const AdminTeacherDashboard = () => {
                   required
                 />
               </div>
-            </div>
-
-            {/* Time Slots Selection */}
-            <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Select Available Time Slots</label>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
-                {formData.timeSlots.map((slot, index) => (
-                  <button
-                    key={index}
-                    type="button"
-                    onClick={() => handleTimeSlotToggle(index)}
-                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      slot.isAvailable
-                        ? 'bg-blue-100 text-blue-800 hover:bg-blue-200'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    }`}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Start Time (24-hour format)</label>
+                <div className="flex gap-2">
+                  <select
+                    value={formData.startTime.split(":")[0] || ""}
+                    onChange={e => {
+                      const hour = e.target.value;
+                      const minute = formData.startTime.split(":")[1] || "00";
+                      handleInputChange('startTime', `${hour}:${minute}`);
+                    }}
+                    className="px-2 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    required
                   >
-                    {slot.value}
-                  </button>
-                ))}
+                    <option value="" disabled>HH</option>
+                    {[...Array(24).keys()].map(h => (
+                      <option key={h} value={h.toString().padStart(2, '0')}>
+                        {h.toString().padStart(2, '0')}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="self-center">:</span>
+                  <select
+                    value={formData.startTime.split(":")[1] || ""}
+                    onChange={e => {
+                      const minute = e.target.value;
+                      const hour = formData.startTime.split(":")[0] || "00";
+                      handleInputChange('startTime', `${hour}:${minute}`);
+                    }}
+                    className="px-2 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    required
+                  >
+                    <option value="" disabled>MM</option>
+                    {[...Array(60).keys()].map(m => (
+                      <option key={m} value={m.toString().padStart(2, '0')}>
+                        {m.toString().padStart(2, '0')}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">Allowed: 00:00 to 23:59 (24-hour format, HH:MM)</p>
               </div>
-              <p className="text-sm text-gray-500 mt-2">
-                Selected slots: {formData.timeSlots.filter(slot => slot.isAvailable).length}
-              </p>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">End Time (24-hour format)</label>
+                <div className="flex gap-2">
+                  <select
+                    value={formData.endTime.split(":")[0] || ""}
+                    onChange={e => {
+                      const hour = e.target.value;
+                      const minute = formData.endTime.split(":")[1] || "00";
+                      handleInputChange('endTime', `${hour}:${minute}`);
+                    }}
+                    className="px-2 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    required
+                  >
+                    <option value="" disabled>HH</option>
+                    {[...Array(24).keys()].map(h => (
+                      <option key={h} value={h.toString().padStart(2, '0')}>
+                        {h.toString().padStart(2, '0')}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="self-center">:</span>
+                  <select
+                    value={formData.endTime.split(":")[1] || ""}
+                    onChange={e => {
+                      const minute = e.target.value;
+                      const hour = formData.endTime.split(":")[0] || "00";
+                      handleInputChange('endTime', `${hour}:${minute}`);
+                    }}
+                    className="px-2 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    required
+                  >
+                    <option value="" disabled>MM</option>
+                    {[...Array(60).keys()].map(m => (
+                      <option key={m} value={m.toString().padStart(2, '0')}>
+                        {m.toString().padStart(2, '0')}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">Allowed: 00:00 to 23:59 (24-hour format, HH:MM)</p>
+              </div>
             </div>
             
             {/* Selected Cards Display */}
@@ -371,7 +399,7 @@ const AdminTeacherDashboard = () => {
             
             <button
               onClick={handleCreateTeacher}
-              disabled={loading || selectedCards.length === 0 || !formData.fullName || !formData.email || !formData.phoneNumber || !formData.password}
+              disabled={loading || selectedCards.length === 0 || !formData.fullName || !formData.email || !formData.phoneNumber || !formData.password || !formData.startTime || !formData.endTime}
               className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white py-2 px-4 rounded-lg font-medium transition-colors disabled:cursor-not-allowed"
             >
               {loading ? 'Creating Teacher...' : 'Create Teacher'}
