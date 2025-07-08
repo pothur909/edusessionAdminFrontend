@@ -71,7 +71,7 @@ export default function DemoLeadForm({ lead, teachers, demos }: DemoLeadFormProp
   const [showAddSubject, setShowAddSubject] = useState(false);
   const [isViewMode, setIsViewMode] = useState(false);
 
-  const baseUrl = process.env.BASE_URL || 'http://localhost:6969';
+  const baseUrl = process.env.BASE_URL ;
 
   const [leadData, setLeadData] = useState<Lead>({
     ...lead,

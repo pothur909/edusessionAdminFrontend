@@ -32,7 +32,7 @@
 //   const [loading, setLoading] = useState(true);
 //   const [error, setError] = useState<string | null>(null);
 
-//   const baseUrl = 'http://localhost:6969';
+//   const baseUrl = process.env.BASE_URL
 
 //   // Derive year, month, day from filters
 //   const year = filters.selectedYear;
@@ -262,7 +262,7 @@ export default function DoubtSessionAnalytics({ filters, subject }: DoubtSession
   const [dayTotal, setDayTotal] = useState(0);
   const [dateRangeTotal, setDateRangeTotal] = useState(0);
 
-  const baseUrl = 'http://localhost:6969';
+  const baseUrl = process.env.BASE_URL ;
 
   // Derive year, month, day from filters
   const year = filters.selectedYear;

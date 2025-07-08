@@ -28,6 +28,8 @@ const PAGE_KEY_MAP: Record<string, string> = {
   // Add more mappings as needed
 };
 
+const baseUrl = process.env.BASE_URL
+
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -42,7 +44,7 @@ export default function LoginPage() {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("http://localhost:6969/api/admin/login", {
+      const res = await fetch(`${baseUrl}/api/admin/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
